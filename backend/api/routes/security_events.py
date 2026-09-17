@@ -7,6 +7,7 @@ from datetime import datetime
 from database import Base, SessionLocal
 from detection.risk_engine import calculate_risk
 from detection.threat_detector import detect_threat
+from mitre.attack_mapper import map_to_attack
 from api.routes.incidents import IncidentDB
 
 
@@ -67,6 +68,11 @@ def create_security_event(
         event.message
     )
 
+    mitre_mapping = map_to_attack(
+        event.event_type,
+        event.message
+    )
+
     new_event = SecurityEventDB(
         event_id=event.event_id,
         device_id=event.device_id,
@@ -90,11 +96,22 @@ def create_security_event(
 
         if not existing_incident:
 
+            technique_id = mitre_mapping.get("technique_id")
+            technique_name = mitre_mapping.get("technique_name")
+
+            incident_title = "Automatic Threat Detection"
+
+            if technique_id:
+                incident_title = (
+                    f"Automatic Threat Detection - "
+                    f"{technique_id}: {technique_name}"
+                )
+
             created_incident = IncidentDB(
                 incident_id=f"INC-{event.event_id}",
                 event_id=event.event_id,
                 device_id=event.device_id,
-                title="Automatic Threat Detection",
+                title=incident_title,
                 description=event.message,
                 severity=event.severity,
                 risk_level=risk_level,
@@ -119,6 +136,7 @@ def create_security_event(
             "message": new_event.message,
             "timestamp": new_event.timestamp
         },
+        "mitre_mapping": mitre_mapping,
         "incident_created": created_incident is not None
     }
 
