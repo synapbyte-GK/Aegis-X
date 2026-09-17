@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy import Column, String, DateTime, Boolean
 from sqlalchemy.orm import Session
@@ -7,6 +7,7 @@ from datetime import datetime
 from database import Base, SessionLocal
 from detection.risk_engine import calculate_risk
 from detection.threat_detector import detect_threat
+from api.routes.incidents import IncidentDB
 
 
 router = APIRouter()
@@ -49,6 +50,16 @@ def create_security_event(
     db: Session = Depends(get_db)
 ):
 
+    existing_event = db.query(SecurityEventDB).filter(
+        SecurityEventDB.event_id == event.event_id
+    ).first()
+
+    if existing_event:
+        raise HTTPException(
+            status_code=409,
+            detail="Security event already exists"
+        )
+
     risk_level = calculate_risk(event.severity)
 
     is_threat = detect_threat(
@@ -68,11 +79,36 @@ def create_security_event(
     )
 
     db.add(new_event)
+
+    created_incident = None
+
+    if is_threat:
+
+        existing_incident = db.query(IncidentDB).filter(
+            IncidentDB.event_id == event.event_id
+        ).first()
+
+        if not existing_incident:
+
+            created_incident = IncidentDB(
+                incident_id=f"INC-{event.event_id}",
+                event_id=event.event_id,
+                device_id=event.device_id,
+                title="Automatic Threat Detection",
+                description=event.message,
+                severity=event.severity,
+                risk_level=risk_level,
+                status="OPEN",
+                created_at=event.timestamp
+            )
+
+            db.add(created_incident)
+
     db.commit()
     db.refresh(new_event)
 
     return {
-        "message": "Security event analyzed and saved successfully",
+        "message": "Security event analyzed successfully",
         "event": {
             "event_id": new_event.event_id,
             "device_id": new_event.device_id,
@@ -82,7 +118,8 @@ def create_security_event(
             "is_threat": new_event.is_threat,
             "message": new_event.message,
             "timestamp": new_event.timestamp
-        }
+        },
+        "incident_created": created_incident is not None
     }
 
 
