@@ -6,6 +6,7 @@ from api.routes.health import router as health_router
 from api.routes.devices import router as devices_router
 from api.routes.security_events import router as security_events_router
 from api.routes.incidents import router as incidents_router
+from api.routes.correlation import router as correlation_router
 
 from api.routes.devices import DeviceDB
 from api.routes.security_events import SecurityEventDB
@@ -22,6 +23,7 @@ app.include_router(health_router)
 app.include_router(devices_router)
 app.include_router(security_events_router)
 app.include_router(incidents_router)
+app.include_router(correlation_router)
 
 
 @app.get("/")
