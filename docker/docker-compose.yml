@@ -1,0 +1,29 @@
+services:
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+
+    container_name: aegis-x-backend
+
+    ports:
+      - "8002:8000"
+
+    restart: unless-stopped
+
+    volumes:
+      - ../backend/aegis_x.db:/app/backend/aegis_x.db
+      - ../backend/ml/anomaly_model.joblib:/app/backend/ml/anomaly_model.joblib
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/').read()"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
