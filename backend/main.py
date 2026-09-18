@@ -1,5 +1,4 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-
 from database import Base, engine
 
 from api.routes.health import router as health_router
@@ -29,12 +28,13 @@ from iot.iot_soc_pipeline import run_iot_soc_pipeline
 
 app = FastAPI(title="Aegis-X")
 
-
-# Create database tables
 Base.metadata.create_all(bind=engine)
 
 
-# API Routers
+# --------------------------------------------------
+# API ROUTERS
+# --------------------------------------------------
+
 app.include_router(health_router)
 app.include_router(devices_router)
 app.include_router(security_events_router)
@@ -58,7 +58,10 @@ app.include_router(iot_soc_router)
 app.include_router(ml_anomaly_router)
 
 
-# Root endpoint
+# --------------------------------------------------
+# ROOT ENDPOINT
+# --------------------------------------------------
+
 @app.get("/")
 def root():
     return {
@@ -67,18 +70,63 @@ def root():
     }
 
 
-# Real-time IoT → ML → SOC WebSocket
+# --------------------------------------------------
+# REAL-TIME WEBSOCKET CONNECTION MANAGER
+# --------------------------------------------------
+
+class ConnectionManager:
+
+    def __init__(self):
+        self.active_connections: set[WebSocket] = set()
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.add(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.discard(websocket)
+
+    async def broadcast(self, data: dict):
+        disconnected = []
+
+        for websocket in list(self.active_connections):
+            try:
+                await websocket.send_json(data)
+            except Exception:
+                disconnected.append(websocket)
+
+        for websocket in disconnected:
+            self.disconnect(websocket)
+
+
+manager = ConnectionManager()
+
+
+# --------------------------------------------------
+# REAL-TIME TELEMETRY WEBSOCKET
+# --------------------------------------------------
+
 @app.websocket("/ws/telemetry")
 async def telemetry_websocket(websocket: WebSocket):
-    await websocket.accept()
+
+    await manager.connect(websocket)
 
     try:
+
         while True:
-            data = await websocket.receive_json()
 
-            result = run_iot_soc_pipeline(data)
+            telemetry = await websocket.receive_json()
 
-            await websocket.send_json(result)
+            # Run complete Aegis-X SOC pipeline
+            result = run_iot_soc_pipeline(telemetry)
+
+            # Broadcast result to every connected client
+            await manager.broadcast(result)
 
     except WebSocketDisconnect:
-        pass
+
+        manager.disconnect(websocket)
+
+    except Exception:
+
+        manager.disconnect(websocket)
