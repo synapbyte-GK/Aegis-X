@@ -18,6 +18,7 @@ from api.routes.threat_analysis_agent import router as threat_analysis_agent_rou
 from api.routes.correlation_agent import router as correlation_agent_router
 from api.routes.response_agent import router as response_agent_router
 from api.routes.report_agent import router as report_agent_router
+from api.routes.orchestrator import router as orchestrator_router
 
 from api.routes.devices import DeviceDB
 from api.routes.security_events import SecurityEventDB
@@ -46,6 +47,7 @@ app.include_router(threat_analysis_agent_router)
 app.include_router(correlation_agent_router)
 app.include_router(response_agent_router)
 app.include_router(report_agent_router)
+app.include_router(orchestrator_router)
 
 
 @app.get("/")
