@@ -8,6 +8,10 @@ services:
       - "8002:8000"
     restart: unless-stopped
 
+    volumes:
+      - ./backend/aegis_x.db:/app/backend/aegis_x.db
+      - ./backend/ml/anomaly_model.joblib:/app/backend/ml/anomaly_model.joblib
+
     healthcheck:
       test:
         [
