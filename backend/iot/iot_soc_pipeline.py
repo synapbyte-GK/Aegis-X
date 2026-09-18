@@ -34,7 +34,9 @@ ML_BASELINE = [
 
 
 ml_detector = TelemetryAnomalyDetector()
-ml_detector.train(ML_BASELINE)
+
+if not ml_detector.trained:
+    ml_detector.train(ML_BASELINE)
 
 
 def run_iot_soc_pipeline(data: dict) -> dict:
