@@ -27,3 +27,18 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: docker/frontend.Dockerfile
+
+    container_name: aegis-x-frontend
+
+    ports:
+      - "5173:80"
+
+    restart: unless-stopped
+
+    depends_on:
+      - backend

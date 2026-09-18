@@ -11,9 +11,10 @@ class TelemetryAnomalyDetector:
 
     def __init__(self):
         self.model = IsolationForest(
-            contamination=0.1,
+            contamination=0.02,
             random_state=42
         )
+
         self.trained = False
 
         if MODEL_PATH.exists():
@@ -36,8 +37,45 @@ class TelemetryAnomalyDetector:
             )
 
         self.model.fit(features)
+
         self.trained = True
+
         self.save()
+
+    def _rule_based_anomaly(self, telemetry: dict) -> bool:
+        temperature = float(
+            telemetry.get("temperature", 0)
+        )
+
+        humidity = float(
+            telemetry.get("humidity", 0)
+        )
+
+        cpu_usage = float(
+            telemetry.get("cpu_usage", 0)
+        )
+
+        network_activity = str(
+            telemetry.get("network_activity", "")
+        ).lower()
+
+        if temperature >= 60:
+            return True
+
+        if cpu_usage >= 80:
+            return True
+
+        if humidity < 20 or humidity > 80:
+            return True
+
+        if network_activity in {
+            "suspicious",
+            "malicious",
+            "attack"
+        }:
+            return True
+
+        return False
 
     def predict(self, telemetry: dict) -> dict:
 
@@ -53,10 +91,39 @@ class TelemetryAnomalyDetector:
         ]]
 
         prediction = self.model.predict(features)[0]
+
         score = self.model.decision_function(features)[0]
 
+        ml_anomaly = prediction == -1
+
+        rule_anomaly = self._rule_based_anomaly(
+            telemetry
+        )
+
+        # Hybrid decision:
+        # Clear security/safety rule violations are anomalies.
+        # ML output is retained for additional analysis.
+        is_anomaly = (
+            rule_anomaly
+            or (
+                ml_anomaly
+                and (
+                    float(telemetry.get("temperature", 0)) >= 50
+                    or float(telemetry.get("cpu_usage", 0)) >= 70
+                    or str(
+                        telemetry.get(
+                            "network_activity",
+                            ""
+                        )
+                    ).lower() != "normal"
+                )
+            )
+        )
+
         return {
-            "is_anomaly": bool(prediction == -1),
+            "is_anomaly": bool(is_anomaly),
+            "ml_prediction": bool(ml_anomaly),
+            "rule_anomaly": bool(rule_anomaly),
             "anomaly_score": float(score)
         }
 
