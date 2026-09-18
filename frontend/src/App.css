@@ -1,0 +1,186 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #0b1020;
+  color: #f5f7fb;
+}
+
+button {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+}
+
+.app {
+  min-height: 100vh;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 40px;
+  border-bottom: 1px solid #20283d;
+  background: #11182b;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.topbar p {
+  margin: 6px 0 0;
+  color: #8f9bb3;
+}
+
+.connection {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #c7d0e3;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.status-dot.online {
+  background: #31d07c;
+}
+
+.status-dot.offline {
+  background: #d94b5b;
+}
+
+.dashboard {
+  padding: 32px 40px;
+  max-width: 1400px;
+  margin: auto;
+}
+
+.hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28px;
+}
+
+.hero h2 {
+  margin: 0;
+  font-size: 25px;
+}
+
+.hero p {
+  margin-top: 7px;
+  color: #8f9bb3;
+}
+
+.hero button {
+  padding: 12px 18px;
+  border-radius: 8px;
+  background: #315efb;
+  color: white;
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
+  margin-bottom: 24px;
+}
+
+.card,
+.panel {
+  background: #11182b;
+  border: 1px solid #20283d;
+  border-radius: 12px;
+}
+
+.card {
+  padding: 22px;
+}
+
+.card span {
+  display: block;
+  color: #8f9bb3;
+  font-size: 14px;
+  margin-bottom: 10px;
+}
+
+.card strong {
+  font-size: 22px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.panel {
+  padding: 24px;
+}
+
+.panel h3 {
+  margin-top: 0;
+  margin-bottom: 22px;
+}
+
+.telemetry,
+.analysis {
+  display: grid;
+  gap: 16px;
+}
+
+.telemetry div,
+.analysis p {
+  display: flex;
+  justify-content: space-between;
+  margin: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #20283d;
+}
+
+.telemetry span,
+.analysis span {
+  color: #8f9bb3;
+}
+
+.muted {
+  color: #8f9bb3;
+}
+
+@media (max-width: 900px) {
+  .cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .topbar,
+  .hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 16px;
+  }
+
+  .dashboard {
+    padding: 24px 18px;
+  }
+
+  .cards {
+    grid-template-columns: 1fr;
+  }
+}
