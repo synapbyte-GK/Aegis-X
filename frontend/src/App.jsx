@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 
 const WS_URL = `ws://${window.location.hostname}:8002/ws/telemetry`;
+const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8002`;
 
 const navigation = [
   { id: "overview", label: "Overview", icon: "grid" },
@@ -182,13 +183,13 @@ function MiniChart({ values = [], label }) {
       const x =
         padding +
         (index / Math.max(values.length - 1, 1)) *
-          (width - padding * 2);
+        (width - padding * 2);
 
       const y =
         height -
         padding -
         ((value - min) / range) *
-          (height - padding * 2);
+        (height - padding * 2);
 
       return `${x},${y}`;
     })
@@ -237,6 +238,12 @@ function App() {
   const [events, setEvents] =
     useState([]);
 
+  const [historyEvents, setHistoryEvents] =
+    useState([]);
+
+  const [historyIncidents, setHistoryIncidents] =
+    useState([]);
+
   const [temperatureHistory, setTemperatureHistory] =
     useState([]);
 
@@ -278,6 +285,89 @@ function App() {
     connection === "CONNECTED"
       ? "LIVE TELEMETRY"
       : "OFFLINE";
+
+  // --------------------------------------------------
+  // LOAD PERSISTENT SECURITY HISTORY
+  // --------------------------------------------------
+
+  useEffect(() => {
+    async function loadHistory() {
+      try {
+        const [eventsResponse, incidentsResponse] =
+          await Promise.all([
+            fetch(`${API_BASE_URL}/security-events`),
+            fetch(`${API_BASE_URL}/incidents`),
+          ]);
+
+        if (
+          !eventsResponse.ok ||
+          !incidentsResponse.ok
+        ) {
+          throw new Error(
+            "Failed to load SOC history"
+          );
+        }
+
+        const eventsData =
+          await eventsResponse.json();
+
+        const incidentsData =
+          await incidentsResponse.json();
+
+        setHistoryEvents(
+          eventsData.events || []
+        );
+
+        setHistoryIncidents(
+          incidentsData.incidents || []
+        );
+      } catch (error) {
+        console.error(
+          "History load error:",
+          error
+        );
+      }
+    }
+
+    loadHistory();
+  }, []);
+
+  // --------------------------------------------------
+  // CONVERT DATABASE EVENTS FOR DASHBOARD
+  // --------------------------------------------------
+
+  useEffect(() => {
+    if (!historyEvents.length) {
+      return;
+    }
+
+    const formattedEvents =
+      historyEvents
+        .map((event) => ({
+          id: event.event_id,
+          time: new Date(event.timestamp),
+          device: event.device_id,
+          type: event.event_type,
+          severity: event.severity,
+          message: event.message,
+          mitre:
+            event.mitre_mapping?.technique_id ||
+            event.technique_id ||
+            "—",
+        }))
+        .sort(
+          (a, b) =>
+            b.time.getTime() -
+            a.time.getTime()
+        )
+        .slice(0, 10);
+
+    setEvents(formattedEvents);
+  }, [historyEvents]);
+
+  // --------------------------------------------------
+  // WEBSOCKET CONNECTION
+  // --------------------------------------------------
 
   useEffect(() => {
     connectSocket();
@@ -355,22 +445,35 @@ function App() {
           const eventData =
             data.security_event;
 
-          setEvents((current) => [
-            {
-              id: eventData.event_id,
-              time: new Date(),
-              device: eventData.device_id,
-              type: eventData.event_type,
-              severity: eventData.severity,
-              message: eventData.message,
-              mitre:
-                data.soc_pipeline
-                  ?.security_analysis
-                  ?.mitre_mapping
-                  ?.technique_id || "—",
-            },
-            ...current,
-          ].slice(0, 10));
+          const newEvent = {
+            id: eventData.event_id,
+            time: new Date(),
+            device: eventData.device_id,
+            type: eventData.event_type,
+            severity: eventData.severity,
+            message: eventData.message,
+            mitre:
+              data.soc_pipeline
+                ?.security_analysis
+                ?.mitre_mapping
+                ?.technique_id || "—",
+          };
+
+          setEvents((current) => {
+            const filtered = current.filter(
+              (event) =>
+                event.id !== newEvent.id
+            );
+
+            return [
+              newEvent,
+              ...filtered,
+            ].slice(0, 10);
+          });
+
+          // Refresh persistent history after
+          // a new security event is created.
+          refreshHistory();
         }
       } catch {
         // Ignore malformed frames
@@ -378,11 +481,55 @@ function App() {
     };
   }
 
+  // --------------------------------------------------
+  // REFRESH DATABASE HISTORY
+  // --------------------------------------------------
+
+  async function refreshHistory() {
+    try {
+      const [eventsResponse, incidentsResponse] =
+        await Promise.all([
+          fetch(`${API_BASE_URL}/security-events`),
+          fetch(`${API_BASE_URL}/incidents`),
+        ]);
+
+      if (
+        !eventsResponse.ok ||
+        !incidentsResponse.ok
+      ) {
+        return;
+      }
+
+      const eventsData =
+        await eventsResponse.json();
+
+      const incidentsData =
+        await incidentsResponse.json();
+
+      setHistoryEvents(
+        eventsData.events || []
+      );
+
+      setHistoryIncidents(
+        incidentsData.incidents || []
+      );
+    } catch (error) {
+      console.error(
+        "History refresh error:",
+        error
+      );
+    }
+  }
+
+  // --------------------------------------------------
+  // SEND TELEMETRY
+  // --------------------------------------------------
+
   function sendTelemetry(payload) {
     if (
       !socketRef.current ||
       socketRef.current.readyState !==
-        WebSocket.OPEN
+      WebSocket.OPEN
     ) {
       return;
     }
@@ -411,6 +558,10 @@ function App() {
       network_activity: "suspicious",
     });
   }
+
+  // --------------------------------------------------
+  // 3D CARD INTERACTION
+  // --------------------------------------------------
 
   function handleCardPointerMove(event) {
     const element =
@@ -470,7 +621,8 @@ function App() {
   const dashboardStats = useMemo(() => {
     const highCount = events.filter(
       (event) =>
-        event.severity === "high"
+        String(event.severity).toLowerCase() ===
+        "high"
     ).length;
 
     return {
@@ -479,6 +631,10 @@ function App() {
       events: events.length,
     };
   }, [events]);
+
+  // --------------------------------------------------
+  // OVERVIEW
+  // --------------------------------------------------
 
   function renderOverview() {
     return (
@@ -597,7 +753,7 @@ function App() {
               <StatusPill
                 tone={
                   connection ===
-                  "CONNECTED"
+                    "CONNECTED"
                     ? "good"
                     : "danger"
                 }
@@ -708,11 +864,10 @@ function App() {
 
             <div className="verdict">
               <div
-                className={`verdict-icon ${
-                  riskLevel === "HIGH"
-                    ? "critical"
-                    : "safe"
-                }`}
+                className={`verdict-icon ${riskLevel === "HIGH"
+                  ? "critical"
+                  : "safe"
+                  }`}
               >
                 <Icon
                   name={
@@ -799,9 +954,10 @@ function App() {
 
             <button
               className="icon-button"
-              onClick={() =>
-                setEvents([])
-              }
+              onClick={() => {
+                setEvents([]);
+                setHistoryEvents([]);
+              }}
               title="Clear session events"
             >
               <Icon
@@ -818,6 +974,10 @@ function App() {
       </>
     );
   }
+
+  // --------------------------------------------------
+  // EVENTS
+  // --------------------------------------------------
 
   function renderEvents() {
     return (
@@ -856,6 +1016,10 @@ function App() {
       </section>
     );
   }
+
+  // --------------------------------------------------
+  // DEVICES
+  // --------------------------------------------------
 
   function renderDevices() {
     return (
@@ -951,6 +1115,10 @@ function App() {
     );
   }
 
+  // --------------------------------------------------
+  // MITRE
+  // --------------------------------------------------
+
   function renderMitre() {
     return (
       <section
@@ -1021,6 +1189,10 @@ function App() {
       </section>
     );
   }
+
+  // --------------------------------------------------
+  // INVESTIGATION
+  // --------------------------------------------------
 
   function renderInvestigation() {
     const findings =
@@ -1105,9 +1277,32 @@ function App() {
             )}
           </div>
         </div>
+        <div className="incident-history">
+          <div className="panel-header">
+            <div>
+              <span className="panel-kicker">
+                INCIDENT HISTORY
+              </span>
+
+              <h2>Stored incidents</h2>
+            </div>
+
+            <StatusPill tone="neutral">
+              {historyIncidents.length} TOTAL
+            </StatusPill>
+          </div>
+
+          <IncidentTable
+            incidents={historyIncidents}
+          />
+        </div>
       </section>
     );
   }
+
+  // --------------------------------------------------
+  // MAIN APP
+  // --------------------------------------------------
 
   return (
     <div className="app-shell">
@@ -1138,11 +1333,10 @@ function App() {
           {navigation.map((item) => (
             <button
               key={item.id}
-              className={`nav-item ${
-                activePage === item.id
-                  ? "active"
-                  : ""
-              }`}
+              className={`nav-item ${activePage === item.id
+                ? "active"
+                : ""
+                }`}
               onClick={() =>
                 setActivePage(item.id)
               }
@@ -1224,7 +1418,7 @@ function App() {
             <StatusPill
               tone={
                 connection ===
-                "CONNECTED"
+                  "CONNECTED"
                   ? "good"
                   : "danger"
               }
@@ -1269,6 +1463,147 @@ function App() {
   );
 }
 
+// --------------------------------------------------
+// EVENT TABLE
+// --------------------------------------------------
+function IncidentTable({
+  incidents = [],
+}) {
+  if (!incidents.length) {
+    return (
+      <div className="empty-state">
+        <div className="empty-icon">
+          <Icon
+            name="shield"
+            size={22}
+          />
+        </div>
+
+        <h3>
+          No stored incidents
+        </h3>
+
+        <p>
+          Threat incidents created by
+          the SOC pipeline will appear
+          here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>INCIDENT</th>
+            <th>DEVICE</th>
+            <th>TITLE</th>
+            <th>SEVERITY</th>
+            <th>RISK</th>
+            <th>STATUS</th>
+            <th>CREATED</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {incidents.map((incident) => {
+            const createdAt =
+              new Date(
+                incident.created_at
+              );
+
+            const status =
+              String(
+                incident.status || ""
+              ).toUpperCase();
+
+            let statusTone = "neutral";
+
+            if (status === "OPEN") {
+              statusTone = "danger";
+            }
+
+            if (status === "RESOLVED") {
+              statusTone = "good";
+            }
+
+            return (
+              <tr
+                key={incident.incident_id}
+              >
+                <td>
+                  <span className="mono">
+                    {incident.incident_id}
+                  </span>
+                </td>
+
+                <td>
+                  <strong>
+                    {incident.device_id}
+                  </strong>
+                </td>
+
+                <td className="message-cell">
+                  {incident.title}
+                </td>
+
+                <td>
+                  <StatusPill
+                    tone={
+                      String(
+                        incident.severity
+                      ).toLowerCase() ===
+                        "high"
+                        ? "danger"
+                        : "neutral"
+                    }
+                  >
+                    {String(
+                      incident.severity
+                    ).toUpperCase()}
+                  </StatusPill>
+                </td>
+
+                <td>
+                  <StatusPill
+                    tone={
+                      String(
+                        incident.risk_level
+                      ).toUpperCase() ===
+                        "HIGH"
+                        ? "danger"
+                        : "neutral"
+                    }
+                  >
+                    {String(
+                      incident.risk_level
+                    ).toUpperCase()}
+                  </StatusPill>
+                </td>
+
+                <td>
+                  <StatusPill tone={statusTone}>
+                    {status}
+                  </StatusPill>
+                </td>
+
+                <td>
+                  {Number.isNaN(
+                    createdAt.getTime()
+                  )
+                    ? "—"
+                    : createdAt.toLocaleString()}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
 function EventTable({
   events,
   large = false,
@@ -1276,9 +1611,8 @@ function EventTable({
   if (!events.length) {
     return (
       <div
-        className={`empty-state ${
-          large ? "large" : ""
-        }`}
+        className={`empty-state ${large ? "large" : ""
+          }`}
       >
         <div className="empty-icon">
           <Icon
@@ -1296,7 +1630,7 @@ function EventTable({
           Use “Simulate threat” or send
           telemetry from the IoT
           simulator to populate the
-          live security feed.
+          security feed.
         </p>
       </div>
     );
@@ -1320,7 +1654,12 @@ function EventTable({
           {events.map((event) => (
             <tr key={event.id}>
               <td>
-                {event.time.toLocaleTimeString()}
+                {event.time instanceof Date &&
+                  !Number.isNaN(
+                    event.time.getTime()
+                  )
+                  ? event.time.toLocaleTimeString()
+                  : "—"}
               </td>
 
               <td>
@@ -1338,13 +1677,17 @@ function EventTable({
               <td>
                 <StatusPill
                   tone={
-                    event.severity ===
-                    "high"
+                    String(
+                      event.severity
+                    ).toLowerCase() ===
+                      "high"
                       ? "danger"
                       : "neutral"
                   }
                 >
-                  {event.severity.toUpperCase()}
+                  {String(
+                    event.severity
+                  ).toUpperCase()}
                 </StatusPill>
               </td>
 

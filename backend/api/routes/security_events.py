@@ -142,9 +142,15 @@ def create_security_event(
 
 
 @router.get("/security-events")
-def get_security_events(db: Session = Depends(get_db)):
+def get_security_events(
+    db: Session = Depends(get_db)
+):
 
-    events = db.query(SecurityEventDB).all()
+    events = (
+        db.query(SecurityEventDB)
+        .order_by(SecurityEventDB.timestamp.desc())
+        .all()
+    )
 
     return {
         "events": [
@@ -156,7 +162,11 @@ def get_security_events(db: Session = Depends(get_db)):
                 "risk_level": event.risk_level,
                 "is_threat": event.is_threat,
                 "message": event.message,
-                "timestamp": event.timestamp
+                "timestamp": event.timestamp,
+                "mitre_mapping": map_to_attack(
+                    event.event_type,
+                    event.message
+                )
             }
             for event in events
         ],

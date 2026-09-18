@@ -1,4 +1,6 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+
 from database import Base, engine
 
 from api.routes.health import router as health_router
@@ -13,20 +15,57 @@ from api.routes.security_analysis import router as security_analysis_router
 from api.routes.soc import router as soc_router
 from api.routes.soc_pipeline import router as soc_pipeline_router
 from api.routes.investigation import router as investigation_router
-from api.routes.threat_analysis_agent import router as threat_analysis_agent_router
-from api.routes.correlation_agent import router as correlation_agent_router
-from api.routes.response_agent import router as response_agent_router
-from api.routes.report_agent import router as report_agent_router
-from api.routes.orchestrator import router as orchestrator_router
+from api.routes.threat_analysis_agent import (
+    router as threat_analysis_agent_router
+)
+from api.routes.correlation_agent import (
+    router as correlation_agent_router
+)
+from api.routes.response_agent import (
+    router as response_agent_router
+)
+from api.routes.report_agent import (
+    router as report_agent_router
+)
+from api.routes.orchestrator import (
+    router as orchestrator_router
+)
 from api.routes.telemetry import router as telemetry_router
-from api.routes.telemetry_security import router as telemetry_security_router
+from api.routes.telemetry_security import (
+    router as telemetry_security_router
+)
 from api.routes.iot_soc import router as iot_soc_router
 from api.routes.ml_anomaly import router as ml_anomaly_router
 
 from iot.iot_soc_pipeline import run_iot_soc_pipeline
 
 
+# --------------------------------------------------
+# APPLICATION
+# --------------------------------------------------
+
 app = FastAPI(title="Aegis-X")
+
+
+# --------------------------------------------------
+# CORS
+# --------------------------------------------------
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# --------------------------------------------------
+# DATABASE
+# --------------------------------------------------
 
 Base.metadata.create_all(bind=engine)
 
@@ -59,7 +98,7 @@ app.include_router(ml_anomaly_router)
 
 
 # --------------------------------------------------
-# ROOT ENDPOINT
+# ROOT
 # --------------------------------------------------
 
 @app.get("/")
@@ -103,7 +142,7 @@ manager = ConnectionManager()
 
 
 # --------------------------------------------------
-# REAL-TIME TELEMETRY WEBSOCKET
+# TELEMETRY WEBSOCKET
 # --------------------------------------------------
 
 @app.websocket("/ws/telemetry")
@@ -117,10 +156,9 @@ async def telemetry_websocket(websocket: WebSocket):
 
             telemetry = await websocket.receive_json()
 
-            # Run complete Aegis-X SOC pipeline
             result = run_iot_soc_pipeline(telemetry)
 
-            # Broadcast result to every connected client
+            # Send SOC result to every connected client
             await manager.broadcast(result)
 
     except WebSocketDisconnect:
