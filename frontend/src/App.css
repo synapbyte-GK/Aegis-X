@@ -1195,3 +1195,218 @@ tbody tr:hover {
     display: none;
   }
 }
+/* ===== Medium Readable Typography ===== */
+
+body {
+  font-size: 14px;
+}
+
+.brand-name {
+  font-size: 17px;
+}
+
+.brand-sub {
+  font-size: 10px;
+}
+
+.side-label {
+  font-size: 11px;
+}
+
+.nav-item {
+  font-size: 13px;
+}
+
+.engine-status {
+  font-size: 12px;
+}
+
+.engine-box strong {
+  font-size: 13px;
+}
+
+.engine-box small {
+  font-size: 11px;
+}
+
+.side-footer {
+  font-size: 10px;
+}
+
+.breadcrumb {
+  font-size: 13px;
+}
+
+.sync-time {
+  font-size: 12px;
+}
+
+.hero-section p {
+  font-size: 14px;
+}
+
+.eyebrow {
+  font-size: 11px;
+}
+
+.hero-section h1 {
+  font-size: clamp(30px, 3vw, 42px);
+}
+
+.btn {
+  font-size: 13px;
+}
+
+.metric-label {
+  font-size: 12px;
+}
+
+.metric-value {
+  font-size: 28px;
+}
+
+.metric-foot {
+  font-size: 11px;
+}
+
+.panel-kicker {
+  font-size: 11px;
+}
+
+.panel-header h2 {
+  font-size: 17px;
+}
+
+.status-pill {
+  font-size: 10px;
+}
+
+.telemetry-item span {
+  font-size: 11px;
+}
+
+.telemetry-item strong {
+  font-size: 18px;
+}
+
+.telemetry-item small {
+  font-size: 11px;
+}
+
+.chart-title {
+  font-size: 11px;
+}
+
+.chart-caption {
+  font-size: 10px;
+}
+
+.verdict-title {
+  font-size: 14px;
+}
+
+.verdict-subtitle {
+  font-size: 11px;
+}
+
+.detail-list span {
+  font-size: 11px;
+}
+
+.detail-list strong {
+  font-size: 11px;
+}
+
+th {
+  font-size: 10px;
+}
+
+td {
+  font-size: 11px;
+}
+
+.event-name {
+  font-size: 11px;
+}
+
+.device-main h3 {
+  font-size: 15px;
+}
+
+.device-main p {
+  font-size: 11px;
+}
+
+.device-details span,
+.info-grid span {
+  font-size: 11px;
+}
+
+.device-details strong,
+.info-grid strong {
+  font-size: 15px;
+}
+
+.mitre-copy span {
+  font-size: 11px;
+}
+
+.mitre-copy h3 {
+  font-size: 20px;
+}
+
+.mitre-copy p {
+  font-size: 12px;
+}
+
+.mitre-id {
+  font-size: 36px;
+}
+
+.investigation-card > strong {
+  font-size: 30px;
+}
+
+.investigation-card > p {
+  font-size: 12px;
+}
+
+.finding p {
+  font-size: 11px;
+}
+
+.muted {
+  font-size: 11px;
+}
+
+/* Mobile readability */
+
+@media (max-width: 600px) {
+  body {
+    font-size: 14px;
+  }
+
+  .nav-item {
+    font-size: 14px;
+  }
+
+  .hero-section p {
+    font-size: 13px;
+  }
+
+  .metric-label {
+    font-size: 12px;
+  }
+
+  .metric-value {
+    font-size: 25px;
+  }
+
+  .telemetry-item strong {
+    font-size: 17px;
+  }
+
+  td {
+    font-size: 11px;
+  }
+}
