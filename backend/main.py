@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 
 from database import Base, engine
 
@@ -22,6 +22,9 @@ from api.routes.orchestrator import router as orchestrator_router
 from api.routes.telemetry import router as telemetry_router
 from api.routes.telemetry_security import router as telemetry_security_router
 from api.routes.iot_soc import router as iot_soc_router
+from api.routes.ml_anomaly import router as ml_anomaly_router
+
+from iot.iot_soc_pipeline import run_iot_soc_pipeline
 
 from api.routes.devices import DeviceDB
 from api.routes.security_events import SecurityEventDB
@@ -34,6 +37,7 @@ app = FastAPI(title="Aegis-X")
 Base.metadata.create_all(bind=engine)
 
 
+# API Routers
 app.include_router(health_router)
 app.include_router(devices_router)
 app.include_router(security_events_router)
@@ -54,6 +58,7 @@ app.include_router(orchestrator_router)
 app.include_router(telemetry_router)
 app.include_router(telemetry_security_router)
 app.include_router(iot_soc_router)
+app.include_router(ml_anomaly_router)
 
 
 @app.get("/")
@@ -62,3 +67,20 @@ def root():
         "project": "Aegis-X",
         "status": "online"
     }
+
+
+# Real-time IoT WebSocket
+@app.websocket("/ws/telemetry")
+async def telemetry_websocket(websocket: WebSocket):
+    await websocket.accept()
+
+    try:
+        while True:
+            data = await websocket.receive_json()
+
+            result = run_iot_soc_pipeline(data)
+
+            await websocket.send_json(result)
+
+    except WebSocketDisconnect:
+        pass
