@@ -15,6 +15,7 @@ from api.routes.soc import router as soc_router
 from api.routes.soc_pipeline import router as soc_pipeline_router
 from api.routes.investigation import router as investigation_router
 from api.routes.threat_analysis_agent import router as threat_analysis_agent_router
+from api.routes.correlation_agent import router as correlation_agent_router
 
 from api.routes.devices import DeviceDB
 from api.routes.security_events import SecurityEventDB
@@ -40,6 +41,7 @@ app.include_router(soc_router)
 app.include_router(soc_pipeline_router)
 app.include_router(investigation_router)
 app.include_router(threat_analysis_agent_router)
+app.include_router(correlation_agent_router)
 
 
 @app.get("/")
