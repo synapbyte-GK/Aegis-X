@@ -1,0 +1,9 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aegis-x-backend
+    ports:
+      - "8002:8000"
+    restart: unless-stopped
