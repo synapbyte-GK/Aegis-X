@@ -10,6 +10,7 @@ from api.routes.correlation import router as correlation_router
 from api.routes.mitre import router as mitre_router
 from api.routes.threat_analysis import router as threat_analysis_router
 from api.routes.response import router as response_router
+from api.routes.security_analysis import router as security_analysis_router
 
 from api.routes.devices import DeviceDB
 from api.routes.security_events import SecurityEventDB
@@ -30,6 +31,7 @@ app.include_router(correlation_router)
 app.include_router(mitre_router)
 app.include_router(threat_analysis_router)
 app.include_router(response_router)
+app.include_router(security_analysis_router)
 
 
 @app.get("/")
