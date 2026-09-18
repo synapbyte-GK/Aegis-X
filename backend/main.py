@@ -26,14 +26,11 @@ from api.routes.ml_anomaly import router as ml_anomaly_router
 
 from iot.iot_soc_pipeline import run_iot_soc_pipeline
 
-from api.routes.devices import DeviceDB
-from api.routes.security_events import SecurityEventDB
-from api.routes.incidents import IncidentDB
-
 
 app = FastAPI(title="Aegis-X")
 
 
+# Create database tables
 Base.metadata.create_all(bind=engine)
 
 
@@ -61,6 +58,7 @@ app.include_router(iot_soc_router)
 app.include_router(ml_anomaly_router)
 
 
+# Root endpoint
 @app.get("/")
 def root():
     return {
@@ -69,7 +67,7 @@ def root():
     }
 
 
-# Real-time IoT WebSocket
+# Real-time IoT → ML → SOC WebSocket
 @app.websocket("/ws/telemetry")
 async def telemetry_websocket(websocket: WebSocket):
     await websocket.accept()
