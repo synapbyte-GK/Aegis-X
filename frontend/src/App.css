@@ -143,8 +143,7 @@ button:focus-visible {
       rgba(80, 199, 214, 0.09)
     );
 
-  border: 1px solid
-    rgba(113, 128, 246, 0.28);
+  border: 1px solid rgba(113, 128, 246, 0.28);
 
   animation:
     brandFloat 4s ease-in-out infinite,
@@ -1581,6 +1580,59 @@ tbody tr:hover {
   font-size: 11px;
 }
 
+/* Incident status selector */
+
+.status-select {
+  min-width: 138px;
+
+  padding: 7px 30px 7px 10px;
+
+  border:
+    1px solid var(--line);
+
+  border-radius: 9px;
+
+  background: var(--panel-2);
+
+  color: var(--text);
+
+  font-size: 12px;
+
+  font-weight: 700;
+
+  letter-spacing: 0.04em;
+
+  outline: none;
+
+  cursor: pointer;
+
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.status-select:hover {
+  border-color: var(--indigo);
+
+  transform:
+    translateY(-1px);
+}
+
+.status-select:focus {
+  border-color: var(--cyan);
+
+  box-shadow:
+    0 0 0 3px
+    rgba(85, 208, 220, 0.12);
+}
+
+.status-select option {
+  background: var(--panel-2);
+
+  color: var(--text);
+}
+
 /* =========================================================
    EMPTY
    ========================================================= */
@@ -2037,6 +2089,21 @@ tbody tr:hover {
 }
 
 /* =========================================================
+   INCIDENT HISTORY
+   ========================================================= */
+
+.incident-history {
+  margin-top: 2px;
+
+  border-top:
+    1px solid var(--line-soft);
+}
+
+.incident-history .panel-header {
+  min-height: 70px;
+}
+
+/* =========================================================
    PAGE ENTRANCE
    ========================================================= */
 
@@ -2394,7 +2461,6 @@ tbody tr:hover {
 
   .panel-header {
     padding-left: 16px;
-
     padding-right: 16px;
   }
 
@@ -2405,7 +2471,6 @@ tbody tr:hover {
   .device-details,
   .info-grid {
     margin-left: 16px;
-
     margin-right: 16px;
   }
 
@@ -2426,6 +2491,10 @@ tbody tr:hover {
   .hero-section h1 {
     font-size: 32px;
   }
+
+  .status-select {
+    min-width: 120px;
+  }
 }
 
 /* =========================================================
@@ -2434,8 +2503,7 @@ tbody tr:hover {
 
 @media (prefers-reduced-motion: reduce) {
   *,
-  *::before,
-  *::after {
+  *::before {
     animation-duration:
       0.01ms !important;
 

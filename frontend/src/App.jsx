@@ -1294,6 +1294,7 @@ function App() {
 
           <IncidentTable
             incidents={historyIncidents}
+            onStatusChange={updateIncidentStatus}
           />
         </div>
       </section>
@@ -1516,18 +1517,8 @@ function IncidentTable({
 
             const status =
               String(
-                incident.status || ""
+                incident.status || "OPEN"
               ).toUpperCase();
-
-            let statusTone = "neutral";
-
-            if (status === "OPEN") {
-              statusTone = "danger";
-            }
-
-            if (status === "RESOLVED") {
-              statusTone = "good";
-            }
 
             return (
               <tr
@@ -1584,9 +1575,28 @@ function IncidentTable({
                 </td>
 
                 <td>
-                  <StatusPill tone={statusTone}>
-                    {status}
-                  </StatusPill>
+                  <select
+                    className="status-select"
+                    value={status}
+                    onChange={(event) =>
+                      onStatusChange?.(
+                        incident.incident_id,
+                        event.target.value
+                      )
+                    }
+                  >
+                    <option value="OPEN">
+                      OPEN
+                    </option>
+
+                    <option value="INVESTIGATING">
+                      INVESTIGATING
+                    </option>
+
+                    <option value="RESOLVED">
+                      RESOLVED
+                    </option>
+                  </select>
                 </td>
 
                 <td>
@@ -1709,3 +1719,37 @@ function EventTable({
 }
 
 export default App;
+async function updateIncidentStatus(
+  incidentId,
+  newStatus
+) {
+  try {
+    const response = await fetch(
+      `${API_BASE_URL}/incidents/${encodeURIComponent(
+        incidentId
+      )}/status`,
+      {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          status: newStatus,
+        }),
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(
+        "Failed to update incident status"
+      );
+    }
+
+    await refreshHistory();
+  } catch (error) {
+    console.error(
+      "Incident status update error:",
+      error
+    );
+  }
+}
