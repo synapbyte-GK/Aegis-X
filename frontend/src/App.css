@@ -28,6 +28,7 @@
 
 html {
   background: var(--bg);
+  color-scheme: dark;
 }
 
 body {
@@ -2911,6 +2912,10 @@ tbody tr:hover {
 
   align-items: center;
   justify-content: space-between;
+
+  gap: 12px;
+
+  flex-wrap: wrap;
 
   margin-top: 16px;
   padding-top: 13px;

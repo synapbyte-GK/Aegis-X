@@ -4,7 +4,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import Base, engine
 
 from api.routes.health import router as health_router
-from api.routes.devices import router as devices_router
+from api.routes.devices import (
+    router as devices_router,
+    record_device_heartbeat,
+)
 from api.routes.security_events import router as security_events_router
 from api.routes.incidents import router as incidents_router
 from api.routes.correlation import router as correlation_router
@@ -155,7 +158,9 @@ async def telemetry_websocket(websocket: WebSocket):
         while True:
 
             telemetry = await websocket.receive_json()
-
+            record_device_heartbeat(
+    telemetry.get("device_id")
+)
             result = run_iot_soc_pipeline(telemetry)
 
             # Send SOC result to every connected client

@@ -183,13 +183,13 @@ function MiniChart({ values = [], label }) {
       const x =
         padding +
         (index / Math.max(values.length - 1, 1)) *
-        (width - padding * 2);
+          (width - padding * 2);
 
       const y =
         height -
         padding -
         ((value - min) / range) *
-        (height - padding * 2);
+          (height - padding * 2);
 
       return `${x},${y}`;
     })
@@ -203,18 +203,13 @@ function MiniChart({ values = [], label }) {
         className="sparkline"
         viewBox={`0 0 ${width} ${height}`}
       >
-        <polyline
-          points={points}
-          fill="none"
-        />
+        <polyline points={points} fill="none" />
       </svg>
 
       <div className="chart-caption">
         <span>{label}</span>
 
-        <span>
-          {values[values.length - 1]}
-        </span>
+        <span>{values[values.length - 1]}</span>
       </div>
     </div>
   );
@@ -241,13 +236,14 @@ function App() {
   const [historyEvents, setHistoryEvents] =
     useState([]);
 
-  const [selectedEventId, setSelectedEventId] =
-    useState(null);
-
   const [historyIncidents, setHistoryIncidents] =
     useState([]);
+
   const [devices, setDevices] =
     useState([]);
+
+  const [selectedEventId, setSelectedEventId] =
+    useState(null);
 
   const [temperatureHistory, setTemperatureHistory] =
     useState([]);
@@ -263,7 +259,8 @@ function App() {
       ?.risk_level || "NORMAL";
 
   const eventType =
-    latestResult?.security_event?.event_type || "none";
+    latestResult?.security_event?.event_type ||
+    "none";
 
   const mitreTechnique =
     latestResult?.soc_pipeline?.security_analysis
@@ -290,10 +287,6 @@ function App() {
     connection === "CONNECTED"
       ? "LIVE TELEMETRY"
       : "OFFLINE";
-
-  // --------------------------------------------------
-  // LOAD PERSISTENT SECURITY HISTORY
-  // --------------------------------------------------
 
   useEffect(() => {
     async function loadHistory() {
@@ -337,14 +330,9 @@ function App() {
     loadHistory();
   }, []);
 
-
-
-  // --------------------------------------------------
-  // CONVERT DATABASE EVENTS FOR DASHBOARD
-  // --------------------------------------------------
-
   useEffect(() => {
     if (!historyEvents.length) {
+      setEvents([]);
       return;
     }
 
@@ -371,6 +359,7 @@ function App() {
 
     setEvents(formattedEvents);
   }, [historyEvents]);
+
   useEffect(() => {
     async function loadDevices() {
       try {
@@ -399,38 +388,47 @@ function App() {
 
     loadDevices();
   }, []);
+
   useEffect(() => {
-    async function loadDevices() {
+    let mounted = true;
+
+    async function pollDevices() {
       try {
         const response = await fetch(
           `${API_BASE_URL}/devices`
         );
 
         if (!response.ok) {
-          throw new Error(
-            "Failed to load devices"
-          );
+          return;
         }
 
         const data = await response.json();
 
-        setDevices(
-          data.devices || []
-        );
+        if (mounted) {
+          setDevices(
+            data.devices || []
+          );
+        }
       } catch (error) {
         console.error(
-          "Device load error:",
+          "Device polling error:",
           error
         );
       }
     }
 
-    loadDevices();
-  }, []);
+    pollDevices();
 
-  // --------------------------------------------------
-  // WEBSOCKET CONNECTION
-  // --------------------------------------------------
+    const interval = setInterval(
+      pollDevices,
+      5000
+    );
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     connectSocket();
@@ -470,12 +468,16 @@ function App() {
       setConnection("ERROR");
     };
 
-    socket.onmessage = (event) => {
+    socket.onmessage = (messageEvent) => {
       try {
-        const data = JSON.parse(event.data);
+        const data = JSON.parse(
+          messageEvent.data
+        );
 
         const incomingTelemetry =
-          data.security_event?.telemetry || null;
+          data.security_event?.telemetry ||
+          data.telemetry ||
+          null;
 
         setTelemetry(incomingTelemetry);
         setLatestResult(data);
@@ -499,6 +501,8 @@ function App() {
               ),
             ].slice(-24)
           );
+
+          refreshDevices();
         }
 
         if (
@@ -510,23 +514,39 @@ function App() {
 
           const newEvent = {
             id: eventData.event_id,
-            time: new Date(),
-            device: eventData.device_id,
-            type: eventData.event_type,
-            severity: eventData.severity,
-            message: eventData.message,
+            time: new Date(
+              eventData.timestamp ||
+                Date.now()
+            ),
+            device:
+              eventData.device_id ||
+              "UNKNOWN",
+            type:
+              eventData.event_type ||
+              "unknown",
+            severity:
+              eventData.severity ||
+              "unknown",
+            message:
+              eventData.message ||
+              "Security event detected",
             mitre:
               data.soc_pipeline
                 ?.security_analysis
                 ?.mitre_mapping
-                ?.technique_id || "—",
+                ?.technique_id ||
+              eventData.mitre_mapping
+                ?.technique_id ||
+              "—",
           };
 
           setEvents((current) => {
-            const filtered = current.filter(
-              (event) =>
-                event.id !== newEvent.id
-            );
+            const filtered =
+              current.filter(
+                (event) =>
+                  event.id !==
+                  newEvent.id
+              );
 
             return [
               newEvent,
@@ -534,27 +554,26 @@ function App() {
             ].slice(0, 10);
           });
 
-          // Refresh persistent history after
-          // a new security event is created.
           refreshHistory();
         }
-      } catch {
-        // Ignore malformed frames
+      } catch (error) {
+        console.error(
+          "WebSocket message error:",
+          error
+        );
       }
     };
   }
 
-  // --------------------------------------------------
-  // REFRESH DATABASE HISTORY
-  // --------------------------------------------------
-
   async function refreshHistory() {
     try {
-      const [eventsResponse, incidentsResponse] =
-        await Promise.all([
-          fetch(`${API_BASE_URL}/security-events`),
-          fetch(`${API_BASE_URL}/incidents`),
-        ]);
+      const [
+        eventsResponse,
+        incidentsResponse,
+      ] = await Promise.all([
+        fetch(`${API_BASE_URL}/security-events`),
+        fetch(`${API_BASE_URL}/incidents`),
+      ]);
 
       if (
         !eventsResponse.ok ||
@@ -584,15 +603,71 @@ function App() {
     }
   }
 
-  // --------------------------------------------------
-  // SEND TELEMETRY
-  // --------------------------------------------------
+  async function refreshDevices() {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/devices`
+      );
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data =
+        await response.json();
+
+      setDevices(
+        data.devices || []
+      );
+    } catch (error) {
+      console.error(
+        "Device refresh error:",
+        error
+      );
+    }
+  }
+
+  async function updateIncidentStatus(
+    incidentId,
+    newStatus
+  ) {
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/incidents/${encodeURIComponent(
+          incidentId
+        )}/status`,
+        {
+          method: "PUT",
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
+          body: JSON.stringify({
+            status: newStatus,
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to update incident status"
+        );
+      }
+
+      await refreshHistory();
+    } catch (error) {
+      console.error(
+        "Incident status update error:",
+        error
+      );
+    }
+  }
 
   function sendTelemetry(payload) {
     if (
       !socketRef.current ||
       socketRef.current.readyState !==
-      WebSocket.OPEN
+        WebSocket.OPEN
     ) {
       return;
     }
@@ -621,10 +696,6 @@ function App() {
       network_activity: "suspicious",
     });
   }
-
-  // --------------------------------------------------
-  // 3D CARD INTERACTION
-  // --------------------------------------------------
 
   function handleCardPointerMove(event) {
     const element =
@@ -681,12 +752,34 @@ function App() {
     );
   }
 
+  function formatLastSeen(lastSeen) {
+    if (!lastSeen) {
+      return "Never";
+    }
+
+    const date =
+      new Date(lastSeen);
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return "Unknown";
+    }
+
+    return date.toLocaleString();
+  }
+
   const dashboardStats = useMemo(() => {
-    const highCount = events.filter(
-      (event) =>
-        String(event.severity).toLowerCase() ===
-        "high"
-    ).length;
+    const highCount =
+      events.filter(
+        (event) =>
+          String(
+            event.severity || ""
+          ).toLowerCase() ===
+          "high"
+      ).length;
 
     return {
       alerts: events.length,
@@ -695,140 +788,6 @@ function App() {
     };
   }, [events]);
 
-  // --------------------------------------------------
-  // OVERVIEW
-  // --------------------------------------------------
-  function renderSecurityAnalytics() {
-    const totalEvents = historyEvents.length;
-
-    const highSeverity = historyEvents.filter(
-      (event) =>
-        String(event.severity).toLowerCase() ===
-        "high"
-    ).length;
-
-    const openIncidents = historyIncidents.filter(
-      (incident) =>
-        String(incident.status).toUpperCase() ===
-        "OPEN"
-    ).length;
-
-    const resolvedIncidents = historyIncidents.filter(
-      (incident) =>
-        String(incident.status).toUpperCase() ===
-        "RESOLVED"
-    ).length;
-
-    return (
-      <section className="analytics-section">
-        <div className="analytics-heading">
-          <div>
-            <span className="panel-kicker">
-              SECURITY ANALYTICS
-            </span>
-
-            <h2>Threat overview</h2>
-
-            <p>
-              Historical security activity and
-              incident posture from the Aegis-X
-              database.
-            </p>
-          </div>
-        </div>
-
-        <div className="analytics-grid">
-          <MetricCard
-            label="Total Events"
-            value={totalEvents}
-            icon="activity"
-            tone="neutral"
-            foot="Stored security events"
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
-          />
-
-          <MetricCard
-            label="High Severity"
-            value={highSeverity}
-            icon="pulse"
-            tone={
-              highSeverity > 0
-                ? "danger"
-                : "neutral"
-            }
-            foot="High-risk security events"
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
-          />
-
-          <MetricCard
-            label="Open Incidents"
-            value={openIncidents}
-            icon="shield"
-            tone={
-              openIncidents > 0
-                ? "danger"
-                : "good"
-            }
-            foot="Awaiting resolution"
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
-          />
-
-          <MetricCard
-            label="Resolved"
-            value={resolvedIncidents}
-            icon="shield"
-            tone="good"
-            foot="Closed security incidents"
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
-          />
-        </div>
-
-        <div
-          className="panel analytics-timeline-panel"
-          onPointerMove={handleCardPointerMove}
-          onPointerLeave={handleCardPointerLeave}
-        >
-          <div className="panel-header">
-            <div>
-              <span className="panel-kicker">
-                THREAT TIMELINE
-              </span>
-
-              <h2>Recent security activity</h2>
-            </div>
-
-            <StatusPill tone="neutral">
-              {totalEvents} EVENTS
-            </StatusPill>
-          </div>
-
-          <ThreatTimeline
-            events={historyEvents}
-            selectedEventId={selectedEventId}
-            onSelect={setSelectedEventId}
-          />
-          {selectedEventId && (
-            <ThreatEventDetails
-              event={
-                historyEvents.find(
-                  (item) =>
-                    item.event_id === selectedEventId
-                )
-              }
-              incident={historyIncidents.find(
-                (item) =>
-                  item.event_id === selectedEventId
-              )}
-            />
-          )}
-        </div>
-      </section>
-    );
-  }
   function renderOverview() {
     return (
       <>
@@ -839,7 +798,9 @@ function App() {
               SECURITY OPERATIONS CENTER
             </div>
 
-            <h1>Command Center</h1>
+            <h1>
+              Command Center
+            </h1>
 
             <p>
               Real-time IoT telemetry,
@@ -852,7 +813,9 @@ function App() {
           <div className="hero-actions">
             <button
               className="btn btn-secondary"
-              onClick={sendNormalTelemetry}
+              onClick={
+                sendNormalTelemetry
+              }
             >
               <Icon
                 name="send"
@@ -863,7 +826,9 @@ function App() {
 
             <button
               className="btn btn-danger"
-              onClick={simulateThreat}
+              onClick={
+                simulateThreat
+              }
             >
               <Icon
                 name="shield"
@@ -881,13 +846,19 @@ function App() {
             icon="shield"
             tone="good"
             foot="Decision engine online"
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
+            onPointerMove={
+              handleCardPointerMove
+            }
+            onPointerLeave={
+              handleCardPointerLeave
+            }
           />
 
           <MetricCard
             label="Threat Alerts"
-            value={dashboardStats.alerts}
+            value={
+              dashboardStats.alerts
+            }
             icon="pulse"
             tone={
               dashboardStats.high
@@ -895,8 +866,12 @@ function App() {
                 : "neutral"
             }
             foot={`${dashboardStats.high} high severity`}
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
+            onPointerMove={
+              handleCardPointerMove
+            }
+            onPointerLeave={
+              handleCardPointerLeave
+            }
           />
 
           <MetricCard
@@ -913,26 +888,41 @@ function App() {
                 : "good"
             }
             foot="Isolation Forest + rules"
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
+            onPointerMove={
+              handleCardPointerMove
+            }
+            onPointerLeave={
+              handleCardPointerLeave
+            }
           />
 
           <MetricCard
             label="Device"
-            value="ESP32-001"
+            value={
+              telemetry?.device_id ||
+              "ESP32-001"
+            }
             icon="server"
             tone="neutral"
             foot={uptimeLabel}
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
+            onPointerMove={
+              handleCardPointerMove
+            }
+            onPointerLeave={
+              handleCardPointerLeave
+            }
           />
         </section>
 
         <section className="content-grid">
           <div
             className="panel wide-panel"
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
+            onPointerMove={
+              handleCardPointerMove
+            }
+            onPointerLeave={
+              handleCardPointerLeave
+            }
           >
             <div className="panel-header">
               <div>
@@ -940,13 +930,15 @@ function App() {
                   TELEMETRY STREAM
                 </span>
 
-                <h2>Signal monitor</h2>
+                <h2>
+                  Signal monitor
+                </h2>
               </div>
 
               <StatusPill
                 tone={
                   connection ===
-                    "CONNECTED"
+                  "CONNECTED"
                     ? "good"
                     : "danger"
                 }
@@ -957,7 +949,9 @@ function App() {
 
             <div className="telemetry-grid">
               <div className="telemetry-item">
-                <span>Temperature</span>
+                <span>
+                  Temperature
+                </span>
 
                 <strong>
                   {telemetry?.temperature ??
@@ -968,7 +962,9 @@ function App() {
               </div>
 
               <div className="telemetry-item">
-                <span>Humidity</span>
+                <span>
+                  Humidity
+                </span>
 
                 <strong>
                   {telemetry?.humidity ??
@@ -979,7 +975,9 @@ function App() {
               </div>
 
               <div className="telemetry-item">
-                <span>CPU Usage</span>
+                <span>
+                  CPU Usage
+                </span>
 
                 <strong>
                   {telemetry?.cpu_usage ??
@@ -990,7 +988,9 @@ function App() {
               </div>
 
               <div className="telemetry-item">
-                <span>Network</span>
+                <span>
+                  Network
+                </span>
 
                 <strong className="capitalize">
                   {telemetry?.network_activity ??
@@ -1013,7 +1013,9 @@ function App() {
                 </div>
 
                 <MiniChart
-                  values={temperatureHistory}
+                  values={
+                    temperatureHistory
+                  }
                   label="°C"
                 />
               </div>
@@ -1040,8 +1042,12 @@ function App() {
 
           <div
             className="panel"
-            onPointerMove={handleCardPointerMove}
-            onPointerLeave={handleCardPointerLeave}
+            onPointerMove={
+              handleCardPointerMove
+            }
+            onPointerLeave={
+              handleCardPointerLeave
+            }
           >
             <div className="panel-header">
               <div>
@@ -1057,10 +1063,11 @@ function App() {
 
             <div className="verdict">
               <div
-                className={`verdict-icon ${riskLevel === "HIGH"
-                  ? "critical"
-                  : "safe"
-                  }`}
+                className={`verdict-icon ${
+                  riskLevel === "HIGH"
+                    ? "critical"
+                    : "safe"
+                }`}
               >
                 <Icon
                   name={
@@ -1089,7 +1096,9 @@ function App() {
 
             <div className="detail-list">
               <div>
-                <span>Risk level</span>
+                <span>
+                  Risk level
+                </span>
 
                 <StatusPill
                   tone={
@@ -1130,28 +1139,189 @@ function App() {
             </div>
           </div>
         </section>
-        {renderSecurityAnalytics()}
-        <section
 
-          className="panel"
-          onPointerMove={handleCardPointerMove}
-          onPointerLeave={handleCardPointerLeave}
-        >
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <span className="panel-kicker">
+                SECURITY ANALYTICS
+              </span>
+
+              <h2>
+                Threat overview
+              </h2>
+            </div>
+          </div>
+
+          <div className="analytics-grid">
+            <MetricCard
+              label="Total Events"
+              value={
+                historyEvents.length
+              }
+              icon="activity"
+              tone="neutral"
+              foot="Stored security events"
+              onPointerMove={
+                handleCardPointerMove
+              }
+              onPointerLeave={
+                handleCardPointerLeave
+              }
+            />
+
+            <MetricCard
+              label="High Severity"
+              value={
+                historyEvents.filter(
+                  (event) =>
+                    String(
+                      event.severity || ""
+                    ).toLowerCase() ===
+                    "high"
+                ).length
+              }
+              icon="pulse"
+              tone={
+                historyEvents.some(
+                  (event) =>
+                    String(
+                      event.severity || ""
+                    ).toLowerCase() ===
+                    "high"
+                )
+                  ? "danger"
+                  : "neutral"
+              }
+              foot="High-risk security events"
+              onPointerMove={
+                handleCardPointerMove
+              }
+              onPointerLeave={
+                handleCardPointerLeave
+              }
+            />
+
+            <MetricCard
+              label="Open Incidents"
+              value={
+                historyIncidents.filter(
+                  (incident) =>
+                    String(
+                      incident.status || ""
+                    ).toUpperCase() ===
+                    "OPEN"
+                ).length
+              }
+              icon="shield"
+              tone={
+                historyIncidents.some(
+                  (incident) =>
+                    String(
+                      incident.status || ""
+                    ).toUpperCase() ===
+                    "OPEN"
+                )
+                  ? "danger"
+                  : "good"
+              }
+              foot="Awaiting resolution"
+              onPointerMove={
+                handleCardPointerMove
+              }
+              onPointerLeave={
+                handleCardPointerLeave
+              }
+            />
+
+            <MetricCard
+              label="Resolved"
+              value={
+                historyIncidents.filter(
+                  (incident) =>
+                    String(
+                      incident.status || ""
+                    ).toUpperCase() ===
+                    "RESOLVED"
+                ).length
+              }
+              icon="shield"
+              tone="good"
+              foot="Closed security incidents"
+              onPointerMove={
+                handleCardPointerMove
+              }
+              onPointerLeave={
+                handleCardPointerLeave
+              }
+            />
+          </div>
+
+          <div className="panel analytics-timeline-panel">
+            <div className="panel-header">
+              <div>
+                <span className="panel-kicker">
+                  THREAT TIMELINE
+                </span>
+
+                <h2>
+                  Recent security activity
+                </h2>
+              </div>
+
+              <StatusPill tone="neutral">
+                {historyEvents.length} EVENTS
+              </StatusPill>
+            </div>
+
+            <ThreatTimeline
+              events={historyEvents}
+              selectedEventId={
+                selectedEventId
+              }
+              onSelect={
+                setSelectedEventId
+              }
+            />
+
+            {selectedEventId && (
+              <ThreatEventDetails
+                event={
+                  historyEvents.find(
+                    (item) =>
+                      item.event_id ===
+                      selectedEventId
+                  )
+                }
+                incident={
+                  historyIncidents.find(
+                    (item) =>
+                      item.event_id ===
+                      selectedEventId
+                  )
+                }
+              />
+            )}
+          </div>
+        </section>
+
+        <section className="panel">
           <div className="panel-header">
             <div>
               <span className="panel-kicker">
                 SECURITY FEED
               </span>
 
-              <h2>Recent events</h2>
+              <h2>
+                Recent events
+              </h2>
             </div>
 
             <button
               className="icon-button"
-              onClick={() => {
-                setEvents([]);
-                setHistoryEvents([]);
-              }}
+              onClick={() =>
+                setEvents([])
+              }
               title="Clear session events"
             >
               <Icon
@@ -1169,16 +1339,16 @@ function App() {
     );
   }
 
-  // --------------------------------------------------
-  // EVENTS
-  // --------------------------------------------------
-
   function renderEvents() {
     return (
       <section
         className="panel full-page-panel"
-        onPointerMove={handleCardPointerMove}
-        onPointerLeave={handleCardPointerLeave}
+        onPointerMove={
+          handleCardPointerMove
+        }
+        onPointerLeave={
+          handleCardPointerLeave
+        }
       >
         <div className="panel-header">
           <div>
@@ -1211,16 +1381,16 @@ function App() {
     );
   }
 
-  // --------------------------------------------------
-  // DEVICES
-  // --------------------------------------------------
-
   function renderDevices() {
     return (
       <section
         className="panel full-page-panel"
-        onPointerMove={handleCardPointerMove}
-        onPointerLeave={handleCardPointerLeave}
+        onPointerMove={
+          handleCardPointerMove
+        }
+        onPointerLeave={
+          handleCardPointerLeave
+        }
       >
         <div className="panel-header">
           <div>
@@ -1235,7 +1405,7 @@ function App() {
 
           <StatusPill
             tone={
-              devices.length > 0
+              devices.length
                 ? "good"
                 : "neutral"
             }
@@ -1278,10 +1448,11 @@ function App() {
 
               return (
                 <div
-                  className={`device-card device-card-grid ${isCurrentDevice
+                  className={`device-card device-card-grid ${
+                    isCurrentDevice
                       ? "current"
                       : ""
-                    }`}
+                  }`}
                   key={device.device_id}
                   onPointerMove={
                     handleCardPointerMove
@@ -1326,6 +1497,13 @@ function App() {
                   <div className="device-meta">
                     <span>
                       {device.device_type}
+                    </span>
+
+                    <span>
+                      LAST SEEN{" "}
+                      {formatLastSeen(
+                        device.last_seen
+                      )}
                     </span>
 
                     {isCurrentDevice && (
@@ -1380,7 +1558,7 @@ function App() {
                       <strong className="capitalize">
                         {isCurrentDevice
                           ? telemetry?.network_activity ??
-                          "—"
+                            "—"
                           : "—"}
                       </strong>
                     </div>
@@ -1394,16 +1572,16 @@ function App() {
     );
   }
 
-  // --------------------------------------------------
-  // MITRE
-  // --------------------------------------------------
-
   function renderMitre() {
     return (
       <section
         className="panel full-page-panel"
-        onPointerMove={handleCardPointerMove}
-        onPointerLeave={handleCardPointerLeave}
+        onPointerMove={
+          handleCardPointerMove
+        }
+        onPointerLeave={
+          handleCardPointerLeave
+        }
       >
         <div className="panel-header">
           <div>
@@ -1427,7 +1605,9 @@ function App() {
               Mapped technique
             </span>
 
-            <h3>{mitreName}</h3>
+            <h3>
+              {mitreName}
+            </h3>
 
             <p>
               The SOC pipeline maps the
@@ -1450,7 +1630,9 @@ function App() {
           </div>
 
           <div>
-            <span>Risk level</span>
+            <span>
+              Risk level
+            </span>
 
             <strong>
               {riskLevel}
@@ -1458,7 +1640,9 @@ function App() {
           </div>
 
           <div>
-            <span>SOC decision</span>
+            <span>
+              SOC decision
+            </span>
 
             <strong>
               {decision}
@@ -1469,10 +1653,6 @@ function App() {
     );
   }
 
-  // --------------------------------------------------
-  // INVESTIGATION
-  // --------------------------------------------------
-
   function renderInvestigation() {
     const findings =
       latestResult?.soc_pipeline
@@ -1481,8 +1661,12 @@ function App() {
     return (
       <section
         className="panel full-page-panel"
-        onPointerMove={handleCardPointerMove}
-        onPointerLeave={handleCardPointerLeave}
+        onPointerMove={
+          handleCardPointerMove
+        }
+        onPointerLeave={
+          handleCardPointerLeave
+        }
       >
         <div className="panel-header">
           <div>
@@ -1540,10 +1724,15 @@ function App() {
                       <span>
                         {String(
                           index + 1
-                        ).padStart(2, "0")}
+                        ).padStart(
+                          2,
+                          "0"
+                        )}
                       </span>
 
-                      <p>{finding}</p>
+                      <p>
+                        {finding}
+                      </p>
                     </div>
                   )
                 )}
@@ -1556,6 +1745,7 @@ function App() {
             )}
           </div>
         </div>
+
         <div className="incident-history">
           <div className="panel-header">
             <div>
@@ -1563,7 +1753,9 @@ function App() {
                 INCIDENT HISTORY
               </span>
 
-              <h2>Stored incidents</h2>
+              <h2>
+                Stored incidents
+              </h2>
             </div>
 
             <StatusPill tone="neutral">
@@ -1573,16 +1765,14 @@ function App() {
 
           <IncidentTable
             incidents={historyIncidents}
-            onStatusChange={updateIncidentStatus}
+            onStatusChange={
+              updateIncidentStatus
+            }
           />
         </div>
       </section>
     );
   }
-
-  // --------------------------------------------------
-  // MAIN APP
-  // --------------------------------------------------
 
   return (
     <div className="app-shell">
@@ -1613,10 +1803,11 @@ function App() {
           {navigation.map((item) => (
             <button
               key={item.id}
-              className={`nav-item ${activePage === item.id
-                ? "active"
-                : ""
-                }`}
+              className={`nav-item ${
+                activePage === item.id
+                  ? "active"
+                  : ""
+              }`}
               onClick={() =>
                 setActivePage(item.id)
               }
@@ -1667,7 +1858,9 @@ function App() {
       <main className="main-area">
         <header className="topbar">
           <div className="breadcrumb">
-            <span>Aegis-X</span>
+            <span>
+              Aegis-X
+            </span>
 
             <b>/</b>
 
@@ -1698,7 +1891,7 @@ function App() {
             <StatusPill
               tone={
                 connection ===
-                  "CONNECTED"
+                "CONNECTED"
                   ? "good"
                   : "danger"
               }
@@ -1710,7 +1903,9 @@ function App() {
 
             <button
               className="icon-button"
-              onClick={connectSocket}
+              onClick={
+                connectSocket
+              }
               title="Reconnect"
             >
               <Icon
@@ -1743,11 +1938,9 @@ function App() {
   );
 }
 
-// --------------------------------------------------
-// EVENT TABLE
-// --------------------------------------------------
 function IncidentTable({
   incidents = [],
+  onStatusChange,
 }) {
   if (!incidents.length) {
     return (
@@ -1796,22 +1989,43 @@ function IncidentTable({
 
             const status =
               String(
-                incident.status || "OPEN"
+                incident.status ||
+                  "OPEN"
               ).toUpperCase();
+
+            let statusTone =
+              "neutral";
+
+            if (status === "OPEN") {
+              statusTone = "danger";
+            }
+
+            if (
+              status ===
+              "RESOLVED"
+            ) {
+              statusTone = "good";
+            }
 
             return (
               <tr
-                key={incident.incident_id}
+                key={
+                  incident.incident_id
+                }
               >
                 <td>
                   <span className="mono">
-                    {incident.incident_id}
+                    {
+                      incident.incident_id
+                    }
                   </span>
                 </td>
 
                 <td>
                   <strong>
-                    {incident.device_id}
+                    {
+                      incident.device_id
+                    }
                   </strong>
                 </td>
 
@@ -1823,15 +2037,17 @@ function IncidentTable({
                   <StatusPill
                     tone={
                       String(
-                        incident.severity
+                        incident.severity ||
+                          ""
                       ).toLowerCase() ===
-                        "high"
+                      "high"
                         ? "danger"
                         : "neutral"
                     }
                   >
                     {String(
-                      incident.severity
+                      incident.severity ||
+                        ""
                     ).toUpperCase()}
                   </StatusPill>
                 </td>
@@ -1840,15 +2056,17 @@ function IncidentTable({
                   <StatusPill
                     tone={
                       String(
-                        incident.risk_level
+                        incident.risk_level ||
+                          ""
                       ).toUpperCase() ===
-                        "HIGH"
+                      "HIGH"
                         ? "danger"
                         : "neutral"
                     }
                   >
                     {String(
-                      incident.risk_level
+                      incident.risk_level ||
+                        ""
                     ).toUpperCase()}
                   </StatusPill>
                 </td>
@@ -1857,10 +2075,13 @@ function IncidentTable({
                   <select
                     className="status-select"
                     value={status}
-                    onChange={(event) =>
+                    onChange={(
+                      event
+                    ) =>
                       onStatusChange?.(
                         incident.incident_id,
-                        event.target.value
+                        event.target
+                          .value
                       )
                     }
                   >
@@ -1893,18 +2114,24 @@ function IncidentTable({
     </div>
   );
 }
+
 function ThreatTimeline({
   events = [],
   selectedEventId = null,
   onSelect,
 }) {
-  const timelineEvents = [...events]
-    .sort(
-      (a, b) =>
-        new Date(b.timestamp).getTime() -
-        new Date(a.timestamp).getTime()
-    )
-    .slice(0, 8);
+  const timelineEvents =
+    [...events]
+      .sort(
+        (a, b) =>
+          new Date(
+            b.timestamp
+          ).getTime() -
+          new Date(
+            a.timestamp
+          ).getTime()
+      )
+      .slice(0, 8);
 
   if (!timelineEvents.length) {
     return (
@@ -1924,98 +2151,121 @@ function ThreatTimeline({
 
   return (
     <div className="threat-timeline">
-      {timelineEvents.map((event) => {
-        const eventTime =
-          new Date(event.timestamp);
+      {timelineEvents.map(
+        (event) => {
+          const eventTime =
+            new Date(
+              event.timestamp
+            );
 
-        const severity =
-          String(
-            event.severity || "unknown"
-          ).toLowerCase();
+          const severity =
+            String(
+              event.severity ||
+                "unknown"
+            ).toLowerCase();
 
-        const mitre =
-          event.mitre_mapping
-            ?.technique_id || "—";
+          const mitre =
+            event.mitre_mapping
+              ?.technique_id ||
+            event.technique_id ||
+            "—";
 
-        const isSelected =
-          selectedEventId ===
-          event.event_id;
+          const isSelected =
+            selectedEventId ===
+            event.event_id;
 
-        return (
-          <div
-            className={`timeline-item ${isSelected ? "selected" : ""
+          return (
+            <div
+              className={`timeline-item ${
+                isSelected
+                  ? "selected"
+                  : ""
               }`}
-            key={event.event_id}
-            role="button"
-            tabIndex={0}
-            onClick={() =>
-              onSelect?.(event.event_id)
-            }
-            onKeyDown={(keyboardEvent) => {
-              if (
-                keyboardEvent.key ===
-                "Enter"
-              ) {
+              key={event.event_id}
+              role="button"
+              tabIndex={0}
+              onClick={() =>
                 onSelect?.(
                   event.event_id
-                );
+                )
               }
-            }}
-          >
-            <div
-              className={`timeline-marker ${severity === "high"
-                ? "danger"
-                : ""
+              onKeyDown={(
+                keyboardEvent
+              ) => {
+                if (
+                  keyboardEvent.key ===
+                  "Enter"
+                ) {
+                  onSelect?.(
+                    event.event_id
+                  );
+                }
+              }}
+            >
+              <div
+                className={`timeline-marker ${
+                  severity === "high"
+                    ? "danger"
+                    : ""
                 }`}
-            />
+              />
 
-            <div className="timeline-content">
-              <div className="timeline-top">
-                <div>
-                  <span className="timeline-event">
-                    {event.event_type}
-                  </span>
+              <div className="timeline-content">
+                <div className="timeline-top">
+                  <div>
+                    <span className="timeline-event">
+                      {
+                        event.event_type
+                      }
+                    </span>
 
-                  <span className="timeline-device">
-                    {event.device_id}
+                    <span className="timeline-device">
+                      {
+                        event.device_id
+                      }
+                    </span>
+                  </div>
+
+                  <span className="timeline-time">
+                    {Number.isNaN(
+                      eventTime.getTime()
+                    )
+                      ? "—"
+                      : eventTime.toLocaleString()}
                   </span>
                 </div>
 
-                <span className="timeline-time">
-                  {Number.isNaN(
-                    eventTime.getTime()
-                  )
-                    ? "—"
-                    : eventTime.toLocaleString()}
-                </span>
-              </div>
+                <div className="timeline-bottom">
+                  <StatusPill
+                    tone={
+                      severity ===
+                      "high"
+                        ? "danger"
+                        : "neutral"
+                    }
+                  >
+                    {severity.toUpperCase()}
+                  </StatusPill>
 
-              <div className="timeline-bottom">
-                <StatusPill
-                  tone={
-                    severity === "high"
-                      ? "danger"
-                      : "neutral"
-                  }
-                >
-                  {severity.toUpperCase()}
-                </StatusPill>
+                  <span className="timeline-mitre">
+                    MITRE {mitre}
+                  </span>
 
-                <span className="timeline-mitre">
-                  MITRE {mitre}
-                </span>
-
-                <span className="timeline-message">
-                  {event.message}
-                </span>
+                  <span className="timeline-message">
+                    {
+                      event.message
+                    }
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        }
+      )}
     </div>
   );
 }
+
 function ThreatEventDetails({
   event,
   incident,
@@ -2026,7 +2276,9 @@ function ThreatEventDetails({
 
   const mitreId =
     event.mitre_mapping
-      ?.technique_id || "—";
+      ?.technique_id ||
+    event.technique_id ||
+    "—";
 
   const mitreName =
     event.mitre_mapping
@@ -2049,21 +2301,26 @@ function ThreatEventDetails({
         <StatusPill
           tone={
             String(
-              event.severity
-            ).toLowerCase() === "high"
+              event.severity ||
+                ""
+            ).toLowerCase() ===
+            "high"
               ? "danger"
               : "neutral"
           }
         >
           {String(
-            event.severity
+            event.severity ||
+              ""
           ).toUpperCase()}
         </StatusPill>
       </div>
 
       <div className="threat-detail-grid">
         <div>
-          <span>Event ID</span>
+          <span>
+            Event ID
+          </span>
 
           <strong className="mono">
             {event.event_id}
@@ -2071,7 +2328,9 @@ function ThreatEventDetails({
         </div>
 
         <div>
-          <span>Device</span>
+          <span>
+            Device
+          </span>
 
           <strong>
             {event.device_id}
@@ -2079,15 +2338,20 @@ function ThreatEventDetails({
         </div>
 
         <div>
-          <span>Risk level</span>
+          <span>
+            Risk level
+          </span>
 
           <strong>
-            {event.risk_level || "—"}
+            {event.risk_level ||
+              "—"}
           </strong>
         </div>
 
         <div>
-          <span>Threat</span>
+          <span>
+            Threat
+          </span>
 
           <strong>
             {event.is_threat
@@ -2097,7 +2361,9 @@ function ThreatEventDetails({
         </div>
 
         <div>
-          <span>MITRE technique</span>
+          <span>
+            MITRE technique
+          </span>
 
           <strong className="mono">
             {mitreId}
@@ -2105,7 +2371,9 @@ function ThreatEventDetails({
         </div>
 
         <div>
-          <span>Technique name</span>
+          <span>
+            Technique name
+          </span>
 
           <strong>
             {mitreName}
@@ -2113,7 +2381,9 @@ function ThreatEventDetails({
         </div>
 
         <div className="threat-detail-wide">
-          <span>Security message</span>
+          <span>
+            Security message
+          </span>
 
           <strong>
             {event.message}
@@ -2121,7 +2391,9 @@ function ThreatEventDetails({
         </div>
 
         <div className="threat-detail-wide">
-          <span>Related incident</span>
+          <span>
+            Related incident
+          </span>
 
           <strong>
             {incident
@@ -2133,15 +2405,17 @@ function ThreatEventDetails({
     </div>
   );
 }
+
 function EventTable({
-  events,
+  events = [],
   large = false,
 }) {
   if (!events.length) {
     return (
       <div
-        className={`empty-state ${large ? "large" : ""
-          }`}
+        className={`empty-state ${
+          large ? "large" : ""
+        }`}
       >
         <div className="empty-icon">
           <Icon
@@ -2184,9 +2458,9 @@ function EventTable({
             <tr key={event.id}>
               <td>
                 {event.time instanceof Date &&
-                  !Number.isNaN(
-                    event.time.getTime()
-                  )
+                !Number.isNaN(
+                  event.time.getTime()
+                )
                   ? event.time.toLocaleTimeString()
                   : "—"}
               </td>
@@ -2207,15 +2481,17 @@ function EventTable({
                 <StatusPill
                   tone={
                     String(
-                      event.severity
+                      event.severity ||
+                        ""
                     ).toLowerCase() ===
-                      "high"
+                    "high"
                       ? "danger"
                       : "neutral"
                   }
                 >
                   {String(
-                    event.severity
+                    event.severity ||
+                      ""
                   ).toUpperCase()}
                 </StatusPill>
               </td>
@@ -2238,37 +2514,3 @@ function EventTable({
 }
 
 export default App;
-async function updateIncidentStatus(
-  incidentId,
-  newStatus
-) {
-  try {
-    const response = await fetch(
-      `${API_BASE_URL}/incidents/${encodeURIComponent(
-        incidentId
-      )}/status`,
-      {
-        method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          status: newStatus,
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error(
-        "Failed to update incident status"
-      );
-    }
-
-    await refreshHistory();
-  } catch (error) {
-    console.error(
-      "Incident status update error:",
-      error
-    );
-  }
-}
