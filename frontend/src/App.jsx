@@ -241,7 +241,12 @@ function App() {
   const [historyEvents, setHistoryEvents] =
     useState([]);
 
+  const [selectedEventId, setSelectedEventId] =
+    useState(null);
+
   const [historyIncidents, setHistoryIncidents] =
+    useState([]);
+  const [devices, setDevices] =
     useState([]);
 
   const [temperatureHistory, setTemperatureHistory] =
@@ -332,6 +337,8 @@ function App() {
     loadHistory();
   }, []);
 
+
+
   // --------------------------------------------------
   // CONVERT DATABASE EVENTS FOR DASHBOARD
   // --------------------------------------------------
@@ -364,6 +371,62 @@ function App() {
 
     setEvents(formattedEvents);
   }, [historyEvents]);
+  useEffect(() => {
+    async function loadDevices() {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/devices`
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to load devices"
+          );
+        }
+
+        const data = await response.json();
+
+        setDevices(
+          data.devices || []
+        );
+      } catch (error) {
+        console.error(
+          "Device load error:",
+          error
+        );
+      }
+    }
+
+    loadDevices();
+  }, []);
+  useEffect(() => {
+    async function loadDevices() {
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/devices`
+        );
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to load devices"
+          );
+        }
+
+        const data = await response.json();
+
+        setDevices(
+          data.devices || []
+        );
+      } catch (error) {
+        console.error(
+          "Device load error:",
+          error
+        );
+      }
+    }
+
+    loadDevices();
+  }, []);
 
   // --------------------------------------------------
   // WEBSOCKET CONNECTION
@@ -635,7 +698,137 @@ function App() {
   // --------------------------------------------------
   // OVERVIEW
   // --------------------------------------------------
+  function renderSecurityAnalytics() {
+    const totalEvents = historyEvents.length;
 
+    const highSeverity = historyEvents.filter(
+      (event) =>
+        String(event.severity).toLowerCase() ===
+        "high"
+    ).length;
+
+    const openIncidents = historyIncidents.filter(
+      (incident) =>
+        String(incident.status).toUpperCase() ===
+        "OPEN"
+    ).length;
+
+    const resolvedIncidents = historyIncidents.filter(
+      (incident) =>
+        String(incident.status).toUpperCase() ===
+        "RESOLVED"
+    ).length;
+
+    return (
+      <section className="analytics-section">
+        <div className="analytics-heading">
+          <div>
+            <span className="panel-kicker">
+              SECURITY ANALYTICS
+            </span>
+
+            <h2>Threat overview</h2>
+
+            <p>
+              Historical security activity and
+              incident posture from the Aegis-X
+              database.
+            </p>
+          </div>
+        </div>
+
+        <div className="analytics-grid">
+          <MetricCard
+            label="Total Events"
+            value={totalEvents}
+            icon="activity"
+            tone="neutral"
+            foot="Stored security events"
+            onPointerMove={handleCardPointerMove}
+            onPointerLeave={handleCardPointerLeave}
+          />
+
+          <MetricCard
+            label="High Severity"
+            value={highSeverity}
+            icon="pulse"
+            tone={
+              highSeverity > 0
+                ? "danger"
+                : "neutral"
+            }
+            foot="High-risk security events"
+            onPointerMove={handleCardPointerMove}
+            onPointerLeave={handleCardPointerLeave}
+          />
+
+          <MetricCard
+            label="Open Incidents"
+            value={openIncidents}
+            icon="shield"
+            tone={
+              openIncidents > 0
+                ? "danger"
+                : "good"
+            }
+            foot="Awaiting resolution"
+            onPointerMove={handleCardPointerMove}
+            onPointerLeave={handleCardPointerLeave}
+          />
+
+          <MetricCard
+            label="Resolved"
+            value={resolvedIncidents}
+            icon="shield"
+            tone="good"
+            foot="Closed security incidents"
+            onPointerMove={handleCardPointerMove}
+            onPointerLeave={handleCardPointerLeave}
+          />
+        </div>
+
+        <div
+          className="panel analytics-timeline-panel"
+          onPointerMove={handleCardPointerMove}
+          onPointerLeave={handleCardPointerLeave}
+        >
+          <div className="panel-header">
+            <div>
+              <span className="panel-kicker">
+                THREAT TIMELINE
+              </span>
+
+              <h2>Recent security activity</h2>
+            </div>
+
+            <StatusPill tone="neutral">
+              {totalEvents} EVENTS
+            </StatusPill>
+          </div>
+
+          <ThreatTimeline
+            events={historyEvents}
+            selectedEventId={selectedEventId}
+            onSelect={setSelectedEventId}
+          />
+          {selectedEventId && (
+            <ThreatEventDetails
+              event={
+                historyEvents.find(
+                  (item) =>
+                    item.event_id === selectedEventId
+                )
+              }
+              incident={historyIncidents.find(
+                (item) =>
+                  item.event_id === selectedEventId
+              )}
+            />
+          )}
+        </div>
+      </section>
+    );
+  }
   function renderOverview() {
     return (
       <>
@@ -937,8 +1130,9 @@ function App() {
             </div>
           </div>
         </section>
-
+        {renderSecurityAnalytics()}
         <section
+
           className="panel"
           onPointerMove={handleCardPointerMove}
           onPointerLeave={handleCardPointerLeave}
@@ -1038,79 +1232,164 @@ function App() {
               Connected assets
             </h2>
           </div>
-        </div>
-
-        <div className="device-card">
-          <div className="device-main">
-            <div className="device-avatar">
-              <Icon
-                name="server"
-                size={24}
-              />
-            </div>
-
-            <div>
-              <h3>ESP32-001</h3>
-
-              <p>
-                IoT telemetry endpoint
-              </p>
-            </div>
-          </div>
 
           <StatusPill
             tone={
-              connection === "CONNECTED"
+              devices.length > 0
                 ? "good"
-                : "danger"
+                : "neutral"
             }
           >
-            {connection === "CONNECTED"
-              ? "ONLINE"
-              : "OFFLINE"}
+            {devices.length} DEVICES
           </StatusPill>
         </div>
 
-        <div className="device-details">
-          <div>
-            <span>
-              Temperature
-            </span>
+        {devices.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-icon">
+              <Icon
+                name="server"
+                size={22}
+              />
+            </div>
 
-            <strong>
-              {telemetry?.temperature ??
-                "—"}{" "}
-              °C
-            </strong>
+            <h3>
+              No registered devices
+            </h3>
+
+            <p>
+              No devices are currently
+              available from the Aegis-X
+              device registry.
+            </p>
           </div>
+        ) : (
+          <div className="devices-grid">
+            {devices.map((device) => {
+              const isCurrentDevice =
+                device.device_id ===
+                telemetry?.device_id;
 
-          <div>
-            <span>CPU</span>
+              const deviceOnline =
+                String(
+                  device.status || ""
+                ).toLowerCase() ===
+                "online";
 
-            <strong>
-              {telemetry?.cpu_usage ??
-                "—"}%
-            </strong>
+              return (
+                <div
+                  className={`device-card device-card-grid ${isCurrentDevice
+                      ? "current"
+                      : ""
+                    }`}
+                  key={device.device_id}
+                  onPointerMove={
+                    handleCardPointerMove
+                  }
+                  onPointerLeave={
+                    handleCardPointerLeave
+                  }
+                >
+                  <div className="device-card-header">
+                    <div className="device-main">
+                      <div className="device-avatar">
+                        <Icon
+                          name="server"
+                          size={24}
+                        />
+                      </div>
+
+                      <div>
+                        <h3>
+                          {device.device_id}
+                        </h3>
+
+                        <p>
+                          {device.name}
+                        </p>
+                      </div>
+                    </div>
+
+                    <StatusPill
+                      tone={
+                        deviceOnline
+                          ? "good"
+                          : "danger"
+                      }
+                    >
+                      {deviceOnline
+                        ? "ONLINE"
+                        : "OFFLINE"}
+                    </StatusPill>
+                  </div>
+
+                  <div className="device-meta">
+                    <span>
+                      {device.device_type}
+                    </span>
+
+                    {isCurrentDevice && (
+                      <span className="device-live-label">
+                        LIVE TELEMETRY
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="device-details">
+                    <div>
+                      <span>
+                        Temperature
+                      </span>
+
+                      <strong>
+                        {isCurrentDevice
+                          ? `${telemetry?.temperature ?? "—"} °C`
+                          : "—"}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        CPU Usage
+                      </span>
+
+                      <strong>
+                        {isCurrentDevice
+                          ? `${telemetry?.cpu_usage ?? "—"}%`
+                          : "—"}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Humidity
+                      </span>
+
+                      <strong>
+                        {isCurrentDevice
+                          ? `${telemetry?.humidity ?? "—"}%`
+                          : "—"}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Network
+                      </span>
+
+                      <strong className="capitalize">
+                        {isCurrentDevice
+                          ? telemetry?.network_activity ??
+                          "—"
+                          : "—"}
+                      </strong>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-
-          <div>
-            <span>Humidity</span>
-
-            <strong>
-              {telemetry?.humidity ??
-                "—"}%
-            </strong>
-          </div>
-
-          <div>
-            <span>Network</span>
-
-            <strong className="capitalize">
-              {telemetry?.network_activity ??
-                "—"}
-            </strong>
-          </div>
-        </div>
+        )}
       </section>
     );
   }
@@ -1611,6 +1890,246 @@ function IncidentTable({
           })}
         </tbody>
       </table>
+    </div>
+  );
+}
+function ThreatTimeline({
+  events = [],
+  selectedEventId = null,
+  onSelect,
+}) {
+  const timelineEvents = [...events]
+    .sort(
+      (a, b) =>
+        new Date(b.timestamp).getTime() -
+        new Date(a.timestamp).getTime()
+    )
+    .slice(0, 8);
+
+  if (!timelineEvents.length) {
+    return (
+      <div className="timeline-empty">
+        <Icon
+          name="pulse"
+          size={20}
+        />
+
+        <span>
+          No historical security activity
+          available.
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="threat-timeline">
+      {timelineEvents.map((event) => {
+        const eventTime =
+          new Date(event.timestamp);
+
+        const severity =
+          String(
+            event.severity || "unknown"
+          ).toLowerCase();
+
+        const mitre =
+          event.mitre_mapping
+            ?.technique_id || "—";
+
+        const isSelected =
+          selectedEventId ===
+          event.event_id;
+
+        return (
+          <div
+            className={`timeline-item ${isSelected ? "selected" : ""
+              }`}
+            key={event.event_id}
+            role="button"
+            tabIndex={0}
+            onClick={() =>
+              onSelect?.(event.event_id)
+            }
+            onKeyDown={(keyboardEvent) => {
+              if (
+                keyboardEvent.key ===
+                "Enter"
+              ) {
+                onSelect?.(
+                  event.event_id
+                );
+              }
+            }}
+          >
+            <div
+              className={`timeline-marker ${severity === "high"
+                ? "danger"
+                : ""
+                }`}
+            />
+
+            <div className="timeline-content">
+              <div className="timeline-top">
+                <div>
+                  <span className="timeline-event">
+                    {event.event_type}
+                  </span>
+
+                  <span className="timeline-device">
+                    {event.device_id}
+                  </span>
+                </div>
+
+                <span className="timeline-time">
+                  {Number.isNaN(
+                    eventTime.getTime()
+                  )
+                    ? "—"
+                    : eventTime.toLocaleString()}
+                </span>
+              </div>
+
+              <div className="timeline-bottom">
+                <StatusPill
+                  tone={
+                    severity === "high"
+                      ? "danger"
+                      : "neutral"
+                  }
+                >
+                  {severity.toUpperCase()}
+                </StatusPill>
+
+                <span className="timeline-mitre">
+                  MITRE {mitre}
+                </span>
+
+                <span className="timeline-message">
+                  {event.message}
+                </span>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+function ThreatEventDetails({
+  event,
+  incident,
+}) {
+  if (!event) {
+    return null;
+  }
+
+  const mitreId =
+    event.mitre_mapping
+      ?.technique_id || "—";
+
+  const mitreName =
+    event.mitre_mapping
+      ?.technique_name ||
+    "No technique mapped";
+
+  return (
+    <div className="threat-details">
+      <div className="threat-details-header">
+        <div>
+          <span className="panel-kicker">
+            EVENT DETAIL
+          </span>
+
+          <h3>
+            {event.event_type}
+          </h3>
+        </div>
+
+        <StatusPill
+          tone={
+            String(
+              event.severity
+            ).toLowerCase() === "high"
+              ? "danger"
+              : "neutral"
+          }
+        >
+          {String(
+            event.severity
+          ).toUpperCase()}
+        </StatusPill>
+      </div>
+
+      <div className="threat-detail-grid">
+        <div>
+          <span>Event ID</span>
+
+          <strong className="mono">
+            {event.event_id}
+          </strong>
+        </div>
+
+        <div>
+          <span>Device</span>
+
+          <strong>
+            {event.device_id}
+          </strong>
+        </div>
+
+        <div>
+          <span>Risk level</span>
+
+          <strong>
+            {event.risk_level || "—"}
+          </strong>
+        </div>
+
+        <div>
+          <span>Threat</span>
+
+          <strong>
+            {event.is_threat
+              ? "CONFIRMED"
+              : "NOT DETECTED"}
+          </strong>
+        </div>
+
+        <div>
+          <span>MITRE technique</span>
+
+          <strong className="mono">
+            {mitreId}
+          </strong>
+        </div>
+
+        <div>
+          <span>Technique name</span>
+
+          <strong>
+            {mitreName}
+          </strong>
+        </div>
+
+        <div className="threat-detail-wide">
+          <span>Security message</span>
+
+          <strong>
+            {event.message}
+          </strong>
+        </div>
+
+        <div className="threat-detail-wide">
+          <span>Related incident</span>
+
+          <strong>
+            {incident
+              ? `${incident.incident_id} • ${incident.status}`
+              : "No incident linked"}
+          </strong>
+        </div>
+      </div>
     </div>
   );
 }
