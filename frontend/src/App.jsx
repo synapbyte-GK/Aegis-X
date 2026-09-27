@@ -2512,5 +2512,4 @@ function EventTable({
     </div>
   );
 }
-
 export default App;
