@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
-
+import Login from "./Login";
+import Register from "./Register";
 const WS_URL = `ws://${window.location.hostname}:8002/ws/telemetry`;
 const API_BASE_URL = `${window.location.protocol}//${window.location.hostname}:8002`;
 
@@ -10,6 +11,7 @@ const navigation = [
   { id: "devices", label: "Devices", icon: "server" },
   { id: "mitre", label: "MITRE ATT&CK", icon: "target" },
   { id: "investigation", label: "Investigation", icon: "search" },
+  { id: "settings", label: "Settings", icon: "settings" },
 ];
 
 function Icon({ name, size = 18 }) {
@@ -112,7 +114,21 @@ function Icon({ name, size = 18 }) {
     activity2: (
       <path d="M3 12h5l2-5 4 10 2-5h5" />
     ),
+    user: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M4 20a8 8 0 0 1 16 0" />
+      </>
+    ),
+
+    settings: (
+      <>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19 12a7 7 0 0 0-.1-1l2-1.5-2-3.4-2.3 1a8 8 0 0 0-1.7-1L15 3h-4l-.4 2.1a8 8 0 0 0-1.7 1l-2.3-1-2 3.4L6.6 10a7 7 0 0 0 0 2l-2 1.5 2 3.4 2.3-1a8 8 0 0 0 1.7 1L11 19h4l.4-2.1a8 8 0 0 0 1.7-1l2.3 1 2-3.4-2-1.5c.1-.3.1-.7.1-1Z" />
+      </>
+    ),
   };
+
 
   return <svg {...common}>{paths[name] || paths.grid}</svg>;
 }
@@ -183,13 +199,13 @@ function MiniChart({ values = [], label }) {
       const x =
         padding +
         (index / Math.max(values.length - 1, 1)) *
-          (width - padding * 2);
+        (width - padding * 2);
 
       const y =
         height -
         padding -
         ((value - min) / range) *
-          (height - padding * 2);
+        (height - padding * 2);
 
       return `${x},${y}`;
     })
@@ -217,7 +233,37 @@ function MiniChart({ values = [], label }) {
 
 function App() {
   const socketRef = useRef(null);
+  const [authUser, setAuthUser] = useState(() => {
+    try {
+      const savedUser =
+        localStorage.getItem("aegis_x_user");
 
+      return savedUser
+        ? JSON.parse(savedUser)
+        : null;
+    } catch {
+      return null;
+    }
+  });
+
+  function handleLogin(user) {
+    setAuthUser(user);
+    setAuthView("login");
+  }
+
+  function handleLogout() {
+    localStorage.removeItem("aegis_x_token");
+    localStorage.removeItem("aegis_x_user");
+
+    setAuthUser(null);
+    setAuthView("login");
+  }
+
+  function handleRegistered() {
+    setAuthView("login");
+  }
+
+  const [authView, setAuthView] = useState("login");
   const [activePage, setActivePage] =
     useState("overview");
 
@@ -516,7 +562,7 @@ function App() {
             id: eventData.event_id,
             time: new Date(
               eventData.timestamp ||
-                Date.now()
+              Date.now()
             ),
             device:
               eventData.device_id ||
@@ -667,7 +713,7 @@ function App() {
     if (
       !socketRef.current ||
       socketRef.current.readyState !==
-        WebSocket.OPEN
+      WebSocket.OPEN
     ) {
       return;
     }
@@ -938,7 +984,7 @@ function App() {
               <StatusPill
                 tone={
                   connection ===
-                  "CONNECTED"
+                    "CONNECTED"
                     ? "good"
                     : "danger"
                 }
@@ -1063,11 +1109,10 @@ function App() {
 
             <div className="verdict">
               <div
-                className={`verdict-icon ${
-                  riskLevel === "HIGH"
-                    ? "critical"
-                    : "safe"
-                }`}
+                className={`verdict-icon ${riskLevel === "HIGH"
+                  ? "critical"
+                  : "safe"
+                  }`}
               >
                 <Icon
                   name={
@@ -1448,11 +1493,10 @@ function App() {
 
               return (
                 <div
-                  className={`device-card device-card-grid ${
-                    isCurrentDevice
-                      ? "current"
-                      : ""
-                  }`}
+                  className={`device-card device-card-grid ${isCurrentDevice
+                    ? "current"
+                    : ""
+                    }`}
                   key={device.device_id}
                   onPointerMove={
                     handleCardPointerMove
@@ -1558,7 +1602,7 @@ function App() {
                       <strong className="capitalize">
                         {isCurrentDevice
                           ? telemetry?.network_activity ??
-                            "—"
+                          "—"
                           : "—"}
                       </strong>
                     </div>
@@ -1773,6 +1817,178 @@ function App() {
       </section>
     );
   }
+  function renderSettings() {
+    return (
+      <section className="settings-page">
+        <div className="settings-heading">
+          <div>
+            <span className="panel-kicker">
+              ACCOUNT & SECURITY
+            </span>
+
+            <h1>Settings</h1>
+
+            <p>
+              Manage your Aegis-X account,
+              security access and session.
+            </p>
+          </div>
+
+          <div className="settings-status">
+            <span className="live-dot" />
+            ACCOUNT ACTIVE
+          </div>
+        </div>
+
+        <div className="settings-grid">
+          <div className="panel settings-card">
+            <div className="settings-card-header">
+              <div className="settings-icon">
+                <Icon name="user" size={20} />
+              </div>
+
+              <div>
+                <span className="panel-kicker">
+                  PROFILE
+                </span>
+
+                <h2>Account information</h2>
+              </div>
+            </div>
+
+            <div className="settings-details">
+              <div>
+                <span>Full name</span>
+                <strong>
+                  {authUser?.full_name || "—"}
+                </strong>
+              </div>
+
+              <div>
+                <span>Email</span>
+                <strong>
+                  {authUser?.email || "—"}
+                </strong>
+              </div>
+
+              <div>
+                <span>Account status</span>
+                <strong className="settings-good">
+                  {authUser?.is_active
+                    ? "ACTIVE"
+                    : "INACTIVE"}
+                </strong>
+              </div>
+
+              <div>
+                <span>Access type</span>
+                <strong>SOC USER</strong>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel settings-card">
+            <div className="settings-card-header">
+              <div className="settings-icon">
+                <Icon name="shield" size={20} />
+              </div>
+
+              <div>
+                <span className="panel-kicker">
+                  SECURITY
+                </span>
+
+                <h2>Access protection</h2>
+              </div>
+            </div>
+
+            <div className="security-list">
+              <div>
+                <span>
+                  Password authentication
+                </span>
+
+                <StatusPill tone="good">
+                  ENABLED
+                </StatusPill>
+              </div>
+
+              <div>
+                <span>
+                  JWT session
+                </span>
+
+                <StatusPill tone="good">
+                  ACTIVE
+                </StatusPill>
+              </div>
+
+              <div>
+                <span>
+                  Security workspace
+                </span>
+
+                <StatusPill tone="good">
+                  PROTECTED
+                </StatusPill>
+              </div>
+            </div>
+          </div>
+
+          <div className="panel settings-card settings-wide">
+            <div className="settings-card-header">
+              <div className="settings-icon">
+                <Icon name="settings" size={20} />
+              </div>
+
+              <div>
+                <span className="panel-kicker">
+                  SESSION
+                </span>
+
+                <h2>Account session</h2>
+              </div>
+            </div>
+
+            <p className="settings-description">
+              Your current Aegis-X session is
+              authenticated using a signed access
+              token.
+            </p>
+
+            <button
+              className="settings-logout"
+              onClick={handleLogout}
+            >
+              <Icon name="user" size={17} />
+              SIGN OUT OF AEGIS-X
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+  if (!authUser) {
+    if (authView === "register") {
+      return (
+        <Register
+          onRegistered={handleRegistered}
+          onBackToLogin={() =>
+            setAuthView("login")
+          }
+        />
+      );
+    }
+
+    return (
+      <Login
+        onLogin={handleLogin}
+        onRegister={() =>
+          setAuthView("register")
+        }
+      />
+    );
+  }
 
   return (
     <div className="app-shell">
@@ -1803,11 +2019,10 @@ function App() {
           {navigation.map((item) => (
             <button
               key={item.id}
-              className={`nav-item ${
-                activePage === item.id
-                  ? "active"
-                  : ""
-              }`}
+              className={`nav-item ${activePage === item.id
+                ? "active"
+                : ""
+                }`}
               onClick={() =>
                 setActivePage(item.id)
               }
@@ -1891,7 +2106,7 @@ function App() {
             <StatusPill
               tone={
                 connection ===
-                "CONNECTED"
+                  "CONNECTED"
                   ? "good"
                   : "danger"
               }
@@ -1900,7 +2115,28 @@ function App() {
 
               {connection}
             </StatusPill>
+            <button
+              className="account-chip"
+              onClick={() =>
+                setActivePage("settings")
+              }
+              title="Account settings"
+            >
+              <span className="account-avatar">
+                <Icon name="user" size={16} />
+              </span>
 
+              <span className="account-info">
+                <strong>
+                  {authUser?.full_name ||
+                    "Aegis-X User"}
+                </strong>
+
+                <small>
+                  {authUser?.email || ""}
+                </small>
+              </span>
+            </button>
             <button
               className="icon-button"
               onClick={
@@ -1928,6 +2164,8 @@ function App() {
 
           {activePage === "mitre" &&
             renderMitre()}
+          {activePage === "settings" &&
+            renderSettings()}
 
           {activePage ===
             "investigation" &&
@@ -1990,7 +2228,7 @@ function IncidentTable({
             const status =
               String(
                 incident.status ||
-                  "OPEN"
+                "OPEN"
               ).toUpperCase();
 
             let statusTone =
@@ -2038,16 +2276,16 @@ function IncidentTable({
                     tone={
                       String(
                         incident.severity ||
-                          ""
+                        ""
                       ).toLowerCase() ===
-                      "high"
+                        "high"
                         ? "danger"
                         : "neutral"
                     }
                   >
                     {String(
                       incident.severity ||
-                        ""
+                      ""
                     ).toUpperCase()}
                   </StatusPill>
                 </td>
@@ -2057,16 +2295,16 @@ function IncidentTable({
                     tone={
                       String(
                         incident.risk_level ||
-                          ""
+                        ""
                       ).toUpperCase() ===
-                      "HIGH"
+                        "HIGH"
                         ? "danger"
                         : "neutral"
                     }
                   >
                     {String(
                       incident.risk_level ||
-                        ""
+                      ""
                     ).toUpperCase()}
                   </StatusPill>
                 </td>
@@ -2161,7 +2399,7 @@ function ThreatTimeline({
           const severity =
             String(
               event.severity ||
-                "unknown"
+              "unknown"
             ).toLowerCase();
 
           const mitre =
@@ -2176,11 +2414,10 @@ function ThreatTimeline({
 
           return (
             <div
-              className={`timeline-item ${
-                isSelected
-                  ? "selected"
-                  : ""
-              }`}
+              className={`timeline-item ${isSelected
+                ? "selected"
+                : ""
+                }`}
               key={event.event_id}
               role="button"
               tabIndex={0}
@@ -2203,11 +2440,10 @@ function ThreatTimeline({
               }}
             >
               <div
-                className={`timeline-marker ${
-                  severity === "high"
-                    ? "danger"
-                    : ""
-                }`}
+                className={`timeline-marker ${severity === "high"
+                  ? "danger"
+                  : ""
+                  }`}
               />
 
               <div className="timeline-content">
@@ -2239,7 +2475,7 @@ function ThreatTimeline({
                   <StatusPill
                     tone={
                       severity ===
-                      "high"
+                        "high"
                         ? "danger"
                         : "neutral"
                     }
@@ -2302,16 +2538,16 @@ function ThreatEventDetails({
           tone={
             String(
               event.severity ||
-                ""
+              ""
             ).toLowerCase() ===
-            "high"
+              "high"
               ? "danger"
               : "neutral"
           }
         >
           {String(
             event.severity ||
-              ""
+            ""
           ).toUpperCase()}
         </StatusPill>
       </div>
@@ -2413,9 +2649,8 @@ function EventTable({
   if (!events.length) {
     return (
       <div
-        className={`empty-state ${
-          large ? "large" : ""
-        }`}
+        className={`empty-state ${large ? "large" : ""
+          }`}
       >
         <div className="empty-icon">
           <Icon
@@ -2458,9 +2693,9 @@ function EventTable({
             <tr key={event.id}>
               <td>
                 {event.time instanceof Date &&
-                !Number.isNaN(
-                  event.time.getTime()
-                )
+                  !Number.isNaN(
+                    event.time.getTime()
+                  )
                   ? event.time.toLocaleTimeString()
                   : "—"}
               </td>
@@ -2482,16 +2717,16 @@ function EventTable({
                   tone={
                     String(
                       event.severity ||
-                        ""
+                      ""
                     ).toLowerCase() ===
-                    "high"
+                      "high"
                       ? "danger"
                       : "neutral"
                   }
                 >
                   {String(
                     event.severity ||
-                      ""
+                    ""
                   ).toUpperCase()}
                 </StatusPill>
               </td>

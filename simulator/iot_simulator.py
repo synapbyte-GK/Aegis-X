@@ -5,7 +5,8 @@ import time
 import websocket
 
 
-WS_URL = "ws://127.0.0.1:8002/ws/telemetry"
+# WS_URL = "ws://127.0.0.1:8002/ws/telemetry"
+WS_URL = "ws://backend:8000/ws/telemetry"
 
 DEVICE_ID = "ESP32-001"
 

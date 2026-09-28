@@ -2,7 +2,8 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
 from database import Base, engine
-
+from auth.models import UserDB
+from auth.routes import router as auth_router
 from api.routes.health import router as health_router
 from api.routes.devices import (
     router as devices_router,
@@ -76,6 +77,7 @@ Base.metadata.create_all(bind=engine)
 # --------------------------------------------------
 # API ROUTERS
 # --------------------------------------------------
+app.include_router(auth_router)
 
 app.include_router(health_router)
 app.include_router(devices_router)

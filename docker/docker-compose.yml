@@ -42,3 +42,16 @@ services:
 
     depends_on:
       - backend
+
+  simulator:
+    build:
+      context: ..
+      dockerfile: docker/simulator.Dockerfile
+
+    container_name: aegis-x-simulator
+
+    restart: unless-stopped
+
+    depends_on:
+      backend:
+        condition: service_healthy
